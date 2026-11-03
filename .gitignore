@@ -1,0 +1,5 @@
+vendor/
+machine/
+*.img
+*.img.gz
+.DS_Store

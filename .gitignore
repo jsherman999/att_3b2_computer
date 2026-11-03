@@ -4,3 +4,4 @@ machine/
 *.img.gz
 .DS_Store
 .venv/
+*.log

@@ -30,11 +30,13 @@ def imgs(pattern):
 
 PACKAGES = {
     "ksh": lambda: imgs("Miscellaneous/Korn_Shell.img"),
+    "kermit": lambda: imgs("Miscellaneous/CKermit_189.img"),
     "ni": lambda: imgs("TCP-IP_Networking/Network_Interface_Drivers_1-1.img"),
     "nsu": lambda: imgs("TCP-IP_Networking/Networking_Support_Utilities_3-2-2.img"),
     "tcpip": lambda: imgs("TCP-IP_Networking/Wollongong_TCP-IP_3-2_*.img"),
     "rfs": lambda: imgs("TCP-IP_Networking/Remote_File_Sharing_Utilities_1-2_*.img"),
     "nfs": lambda: imgs("TCP-IP_Networking/System_V_NFS_3-2-4_*.img"),
+    "termfilt": lambda: imgs("System_V_Release_3.2/Terminal_Filter_Utilities.img"),
     "dwb": lambda: imgs("Documenters_Workbench/*.img"),
     "wwb": lambda: imgs("Writers_Workbench/*.img"),
     "fortran": lambda: imgs("Development_Tools/Other_Languages/Fortran_*.img"),
@@ -69,6 +71,9 @@ ANSWERS = {
         (r"how many pseudo ttys .*\[1-64\]: $", ["32"]),
     ],
     "nsu": [(r"number of pseudo terminal devices \[0 - 256\]: $", ["32"])],
+    "dwb": [
+        (r"read the PACKAGE DESCRIPTION FILE.*\[y, n\] $", ["n"]),
+    ],
     "wwb": [
         (r"installation requirements and procedures\? \(y or n\) $", ["n"]),
         (r"is already installed\.\s*Do you want to reinstall it\? \(y or n\) $", ["n"]),
@@ -79,6 +84,8 @@ ANSWERS = {
 GENERIC = [
     (r"Type 'y' to [^\n]*\n?[^\n]*'n' to [^\n]*: *$", ["y"]),
     (r"\(yes or no\): *$", ["yes"]),
+    (r"(?s)PACKAGE DESCRIPTION FILE.{0,80}\[y, n\] $", ["n"]),
+    (r"HIT CARRIAGE RETURN", [""]),
 ]
 
 # Prompts seen in AT&T INSTALL scripts. Order matters: first match wins.
@@ -175,7 +182,7 @@ def main(names):
             sys.stdout.flush()
 
     s = Sim(log=Tee(), idle=False)
-    s.login()
+    s.login(password=os.environ.get("ROOT_PW", "att3b2"))
     results = {}
     for n in names:
         results[n] = install(s, n, PACKAGES[n]())

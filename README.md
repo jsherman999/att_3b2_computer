@@ -36,3 +36,11 @@ with a bitmapped AT&T graphical terminal as its monitor.
 - `machine/700/` — ROM, NVRAM, TOD, boot.ini, disk images (not committed)
 - `machine/software/` — 3B2 install floppies mirrored from
   archives.loomcom.com/3b2/software (not committed)
+
+## Quick start
+
+    scripts/fetch-assets.sh                 # ROMs, disk image, build simulator
+    cd machine/700 && ../../vendor/simh/BIN/3b2-700 ../../config/smoke-test.ini
+
+`smoke-test.ini` boots to `Console Login:`, logs in as root, runs `uname`/`df`
+and exits. Status: **boots clean to SVR3.2.3 on Apple Silicon (2026-11-03).**

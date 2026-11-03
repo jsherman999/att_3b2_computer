@@ -1,0 +1,21 @@
+--- a/slirp_glue/sim_slirp.c
++++ b/slirp_glue/sim_slirp.c
+@@ -341,10 +341,15 @@
+     slirp->gpollfds = g_array_new(FALSE, FALSE, sizeof(GPollFD));
+     /* setup transmit packet wakeup doorbell */
+     do {
+-        if ((rnd_val & 0xFFFF) == 0)
+-            ++rnd_val;
+-        sprintf (db_host, "localhost:%d", (int)(rnd_val & 0xFFFF));
++        /* att3b2: start above 1023 (macOS refuses unprivileged binds to low ports on
++           localhost) and move to the next port on failure; retrying the same port
++           looped forever when the clock-derived pick was refused or busy. */
++        rnd_val &= 0xFFFF;
++        if (rnd_val < 1024)
++            rnd_val += 1024;
++        sprintf (db_host, "localhost:%d", (int)rnd_val);
+         slirp->db_chime  = sim_connect_sock_ex (db_host, db_host, NULL, NULL, SIM_SOCK_OPT_DATAGRAM | SIM_SOCK_OPT_BLOCKING);
++        ++rnd_val;
+         } while (slirp->db_chime == INVALID_SOCKET);
+     memset (&pfd, 0, sizeof (pfd));
+     pfd.fd = slirp->db_chime;

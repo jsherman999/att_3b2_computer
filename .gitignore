@@ -3,3 +3,4 @@ machine/
 *.img
 *.img.gz
 .DS_Store
+.venv/

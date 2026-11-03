@@ -1,0 +1,201 @@
+
+AT&T 3B2/700 simulator Open SIMH V4.1-0 Current        git commit id: 87eb7d5e
+/Users/jay/ccode/att3b2/config/base.ini-2> set console -q
+Too few arguments
+/Users/jay/ccode/att3b2/config/base.ini-3> load -r 3b2_700.bin
+%SIM-INFO: 131072 bytes loaded into ROM
+/Users/jay/ccode/att3b2/config/base.ini-6> att nvram nvram.bin
+%SIM-INFO: NVRAM: buffering file in memory
+/Users/jay/ccode/att3b2/config/base.ini-7> att tod tod.bin
+%SIM-INFO: TOD: buffering file in memory
+/Users/jay/ccode/att3b2/config/base.ini-13> attach ports 9001
+%SIM-INFO: Listening on port 9001
+  
+
+SELF-CHECK
+
+DIAGNOSTICS      PASSED
+
+
+UNIX(R) System V Release 3.2.3 AT&T 3B2 Version 3
+Node unix
+Total real memory  = 67108864
+Available memory   = 58402816
+
+***********************************************************************
+
+Copyright (c) 1984, 1987, 1988, 1989, 1990 AT&T - All Rights Reserved
+
+THIS IS UNPUBLISHED PROPRIETARY SOURCE CODE OF AT&T INC.
+The copyright notice above does not evidence any actual or
+intended publication of such source code.
+
+***********************************************************************
+
+The system is coming up.  Please wait.
+
+This machine has not been used as a customer machine yet.  The messages that
+follow are from checking the built-in file systems for damage that might have
+occurred during shipment.  As long as you do not see either of the messages
+                                BOOT UNIX
+or                      FILE SYSTEM WAS MODIFIED
+all is well.  If either message does come out, call your service representative.
+However, the machine is still usable unless you are told otherwise.
+Checking file systems:
+
+
+  /dev/dsk/c1t1d0s2
+  File System: usr Volume: 3.2.3
+
+  ** Phase 1 - Check Blocks and Sizes
+  ** Phase 2 - Check Pathnames
+  ** Phase 3 - Check Connectivity
+  ** Phase 4 - Check Reference Counts
+  ** Phase 5 - Check Free List 
+  5167 files 48140 blocks 910068 free
+
+
+mount -f S5 /dev/dsk/c1t1d0s2 /usr
+AT&T 3B2 SYSTEM CONFIGURATION:
+
+Memory size: 64 Megabytes
+System Peripherals:
+
+        Device Name        Subdevices           Extended Subdevices
+
+        SBD 
+                        Floppy Disk
+        SCSI 
+         (S.E. BUS ID0)
+                        SD01 ID1
+                                                663 Megabyte Disk ID0
+        PORTS 
+        PORTS 
+        MAU 
+Starting job accounting
+Print services started.
+
+        Welcome!
+This machine has to be set up by you.  When you see the "login" message type
+                                setup
+followed by the RETURN key.  This will start a procedure that leads you through
+those things that should be done the "first time" the machine is used.
+
+The system is ready.
+
+Console Login: root
+UNIX System V Release 3.2.3 AT&T 3B2
+unix
+Copyright (c) 1984, 1986, 1987, 1988, 1989, 1990 AT&T
+All Rights Reserved
+Login last used: Tue Oct  4 05:46:21 2022
+# stty erase '^H' kill '^U'
+# PS1='SIMSH> '; export PS1; TERM=dumb; export TERM
+SIMSH> sed -n '80,200p' /usr/admin/menu/softwaremgmt/installpkg
+                #       A problem in cpio makes it change the modes and
+                #       ownership of directories it did not create.  This trick
+                #       records and later restores the existing values.  The
+                #       directories to be protected are listed in /etc/coredirs.
+                cpio -o </etc/coredirs >$$installpkg 2>/dev/null
+        fi
+        /tmp/$$INSTALL ${ddrive} /install "${ndrive}"  ||
+                echo 'WARNING:  Installation may not have completed properly.'
+        trap '' 1 2
+        if [ -f $$installpkg ]
+        then
+                #       Restore the directory modes and ownerships.
+                cpio -id <$$installpkg >/dev/null 2>&1
+        fi
+        rm -f $$INSTALL
+        diskumount -n "${ndrive}" ${ddrive}
+        trap 'rm -f /tmp/$$*' 0
+        trap exit 1 2
+done
+SIMSH> 
+Simulation stopped, PC: 4003EA53 (MOVW %r7,8(%r6))
+sim> detach ifloppy
+Unit not attached
+sim> c
+
+Simulation stopped, PC: 40000680 (RET)
+sim> attach -r ifloppy /Users/jay/ccode/att3b2/machine/software/Miscellaneous/Ko rn_Shell.img
+%SIM-INFO: IFLOPPY: Unit is read only
+sim> c
+
+SIMSH> mkdir -p /install; /etc/mount /dev/diskette /install -r; ls -lR /install | sed -n 1,40p; cat /install/install/INSTALL
+mkdir: "/install": File exists
+total 2
+drwxrwxr-x   2 root     sys           80 Aug 10  1984 install
+drwxrwxr-x   4 root     root          64 Mar  7  1994 new
+
+/install/install:
+total 4
+-r-xr-xr-x   1 bin      bin          489 Mar 15  1994 INSTALL
+-r-xr-xr-x   1 bin      bin           31 Mar  7  1994 Rlist
+-r-xr-xr-x   1 bin      bin          534 Mar 15  1994 UNINSTALL
+
+/install/new:
+total 2
+drwxrwxr-x   2 root     other         48 Mar  7  1994 bin
+drwxrwxr-x   3 root     root          64 Mar  7  1994 usr
+
+/install/new/bin:
+total 215
+-rwxr-xr-x   1 root     other     108424 Mar 15  1994 ksh
+
+/install/new/usr:
+total 1
+drwxrwxr-x   2 root     sys           64 Mar  7  1994 options
+
+/install/new/usr/options:
+total 1
+-r-xr-xr-x   1 bin      bin           11 Mar  7  1994 ksh.name
+#
+# Single Floppy INSTALL Script
+#
+#
+# Save mount point of floppy (INSPATH) and package name (PKGNAME)
+#
+
+INSPATH=/install/new
+PKGNAME=`cat ${INSPATH}/usr/options/ksh.name`
+
+echo "Installing the ${PKGNAME}."
+echo "Copyright (c) 1984 AT&T Technologies, Inc."
+echo "All Rights Reserved"
+
+
+cd ${INSPATH}
+echo "The following files are being installed:"
+find . -print | cpio -pduvm /
+
+#
+# Give user closing message
+#
+
+chmod 1755 /bin/ksh
+echo "Installation of the ${PKGNAME} is complete."
+exit
+SIMSH> /etc/umount /dev/diskette
+SIMSH> cd /; sync; sync; shutdown -y -g0 -i0
+
+Shutdown started.    Tue Oct  4 05:49:18 PDT 2022
+
+Broadcast Message from root (console) on unix Tue Oct  4 05:49:18...
+THE SYSTEM IS BEING SHUT DOWN NOW ! ! !
+Log off now or risk your files being damaged.
+
+
+SIMSH> 
+INIT: New run level: 0
+The system is coming down.  Please wait.
+System services are now being stopped.
+Print services stopped.
+Stopping job accounting
+cron aborted: SIGTERM
+
+The system is down
+System Powered Off, PC: 4000DC3C (BRB &0x0)
+sim> quit
+Goodbye
+%SIM-INFO: TOD: writing buffer to file: tod.bin

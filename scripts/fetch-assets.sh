@@ -9,4 +9,7 @@ done
 [ -f "$M/sd630.img" ] || gunzip -k "$M/sd630.img.gz"
 [ -f "$M/disk0.img" ] || cp "$M/sd630.img" "$M/disk0.img"
 [ -d "$ROOT/vendor/simh" ] || git clone --depth 1 https://github.com/open-simh/simh.git "$ROOT/vendor/simh"
+for p in "$ROOT"/patches/*.patch; do
+  git -C "$ROOT/vendor/simh" apply --check "$p" 2>/dev/null && git -C "$ROOT/vendor/simh" apply "$p"
+done
 make -C "$ROOT/vendor/simh" 3b2-700

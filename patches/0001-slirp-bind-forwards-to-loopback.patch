@@ -1,0 +1,13 @@
+diff --git a/slirp_glue/sim_slirp.c b/slirp_glue/sim_slirp.c
+index 9971d2a..c3daa7b 100644
+--- a/slirp_glue/sim_slirp.c
++++ b/slirp_glue/sim_slirp.c
+@@ -119,7 +119,7 @@ static int _do_redirects (Slirp *slirp, struct redir_tcp_udp *head)
+ struct in_addr host_addr;
+ int ret = 0;
+ 
+-host_addr.s_addr = htonl(INADDR_ANY);
++host_addr.s_addr = htonl(INADDR_LOOPBACK);   /* att3b2: only this Mac may connect */
+ if (head) {
+     ret = _do_redirects (slirp, head->next);
+     if (slirp_add_hostfwd (slirp, head->is_udp, host_addr, head->lport, head->inaddr, head->port) < 0) {

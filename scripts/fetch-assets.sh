@@ -23,3 +23,21 @@ make -C "$ROOT/vendor/simh" 3b2-700
 for p in "$ROOT"/patches/dmd_core-*.patch; do
   git -C "$ROOT/vendor/dmd_core" apply --check "$p" 2>/dev/null && git -C "$ROOT/vendor/dmd_core" apply "$p"
 done
+
+# AT&T 630 MTG host software (GPL / public domain, from Dave Dykstra), pinned, with our
+# macOS patches; scripts/build-630host.sh builds it. freesdp630 has files whose names
+# differ only in case; on a case-insensitive disk one of each pair is missing, which
+# only affects terminal-side sources we do not build.
+for spec in dmd-layers:5aedcc2 freesdp630:da282f4 mtg-binaries:e8403c6; do
+  r=${spec%%:*}; rev=${spec#*:}
+  [ -d "$ROOT/vendor/$r" ] || {
+    git clone -q https://github.com/dmdmtg/$r.git "$ROOT/vendor/$r" 2>/dev/null || true
+    git -C "$ROOT/vendor/$r" checkout -q "$rev"
+  }
+done
+for p in "$ROOT"/patches/dmd-layers-*.patch; do
+  git -C "$ROOT/vendor/dmd-layers" apply --check "$p" 2>/dev/null && git -C "$ROOT/vendor/dmd-layers" apply "$p"
+done
+for p in "$ROOT"/patches/freesdp630-*.patch; do
+  git -C "$ROOT/vendor/freesdp630" apply --check "$p" 2>/dev/null && git -C "$ROOT/vendor/freesdp630" apply "$p"
+done

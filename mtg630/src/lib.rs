@@ -138,13 +138,15 @@ impl Bus {
     ///   4: DUART2 OP4 (Aux EIA, channel A receive ready)
     ///   3: DUART1 INTR (counter/timer: the system tick)
     ///   2: DUART2 INTR (mouse, input-port change) and DUART1 OP5 (keyboard receive)
-    ///   1: vertical blank
+    ///   1: vertical blank and DUART1/2 OP6 (TxRDYA: Main/Aux EIA transmit)
     fn irq_level(&self) -> u8 {
         let d1 = &self.duart1;
         let d2 = &self.duart2;
-        // Only RxRDYA (OP4) interrupts. The firmware programs OP6 as TxRDYA too, but its
-        // level 5/4 handler (EBB2) only drains the receiver; transmit is polled from the
-        // vertical-blank handler (EED4/F064 -> ECF8). Wiring OP6 here makes an interrupt storm.
+        // RxRDYA (OP4) is levels 5/4; the level 5/4 handler (EBB2) only drains the receiver.
+        // TxRDYA (OP6) shares level 1 with vertical blank: that handler (EED4/F064 -> ECF8)
+        // fills THR while TxRDY and disables the transmitter when its queue is empty, which
+        // is what drops the interrupt. Polling at vertical blank alone sent ~1 byte a frame
+        // and stalled xt (layers) packets mid-packet; wiring OP6 to level 5 made a storm.
         if d1.opcr_bits() & 0x10 != 0 && d1.op_asserted(4) {
             5
         } else if d2.opcr_bits() & 0x10 != 0 && d2.op_asserted(4) {
@@ -153,7 +155,10 @@ impl Bus {
             3
         } else if d2.irq() || (d1.opcr_bits() & 0x20 != 0 && d1.op_asserted(5)) {
             2
-        } else if self.vblank_irq {
+        } else if self.vblank_irq
+            || (d1.opcr_bits() & 0x40 != 0 && d1.op_asserted(6))
+            || (d2.opcr_bits() & 0x40 != 0 && d2.op_asserted(6))
+        {
             1
         } else {
             0
@@ -317,6 +322,7 @@ impl Mtg630 {
     }
 
     pub fn pc(&self) -> u32 { self.cpu.pc }
+    pub fn sr(&self) -> u16 { self.cpu.get_sr() }
 }
 
 /// Build the 256 KB program image from the four EPROMs, as MAME's ROM_LOAD16_BYTE does.

@@ -1,0 +1,75 @@
+diff --git a/include/lyrscfg.h b/include/lyrscfg.h
+index fe0d304..af20a5a 100644
+--- a/include/lyrscfg.h
++++ b/include/lyrscfg.h
+@@ -186,6 +186,16 @@
+ #undef USE_PTEM
+ #endif
+ 
++#if (__APPLE__)
++/* macOS: SVR4-style /dev/ptmx, getutxent(), stdarg */
++#define NO_UT_EXIT
++#define USE_DIRENT
++#define USE_UNISTD
++#define USE_STDARG		/* use stdarg.h instead of varargs.h */
++#undef USE_TTYDEV
++#undef USE_PTEM
++#endif
++
+ #ifdef uts
+ /* amdahl's uts, at least version 2.1.2 */
+ #define USE_POLL		/* use poll(2) instead of select */
+diff --git a/layers/common.h b/layers/common.h
+index 3cbf2ea..2b19252 100644
+--- a/layers/common.h
++++ b/layers/common.h
+@@ -17,6 +17,11 @@
+ #include <sys/param.h>
+ #endif
+ 
++#ifdef USE_STDARG
++/* Variadic: must be prototyped (arm64 passes variadic arguments differently). */
++void Debug(int level, char *format, ...);
++#endif
++
+ /* Debug levels */
+ #define DEBERROR	0x01		/* non-protocol error */
+ #define DEBINFO		0x02		/* low-volume info messages */
+diff --git a/layers/trace.c b/layers/trace.c
+index a064372..b09d4ec 100644
+--- a/layers/trace.c
++++ b/layers/trace.c
+@@ -11,6 +11,7 @@
+ #include	"packets.h"
+ #define	DECLARE				/* Define statistics array here */
+ #include	"pstats.h"
++#define log xtlog	/* <math.h> on some systems declares log() */
+ 
+ extern int DebugLevel;
+ extern FILE *DebugFile;
+diff --git a/layers/utmp_tty.c b/layers/utmp_tty.c
+index 4244845..b60c49a 100644
+--- a/layers/utmp_tty.c
++++ b/layers/utmp_tty.c
+@@ -81,7 +81,9 @@ extern struct layer layer[];
+ extern char *strcat();
+ extern char *strncpy();
+ extern char *strcpy();
++#ifndef USE_UNISTD
+ extern long lseek();
++#endif
+ 
+ static char * layer0ttyname;
+ static char layer0hostname[MAXPATHLEN];
+@@ -163,7 +165,11 @@ cntrlspeed(fd)
+ int fd;
+ {
+ #ifndef NO_TERMIO
++#ifdef CBAUD
+ 	return saveterm.c_cflag & CBAUD;
++#else
++	return cfgetospeed(&saveterm);
++#endif
+ #else
+ 	return (sgttyb.sg_ospeed);
+ #endif

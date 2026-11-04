@@ -13,6 +13,7 @@ done
 "$ROOT/scripts/check-patches.sh"          # vendored changes must all be in patches/
 ( cd "$ROOT/dmd_ffi" && cargo build --release )        # libatt_dmd.a: the DMD 5620 core
 ( cd "$ROOT/app" && swift build -c release )
+[ -d "$ROOT/vendor/dmd-layers" ] && "$ROOT/scripts/build-630host.sh" "$ROOT/build/630host"   # 630 layers host
 BIN=$(cd "$ROOT/app" && swift build -c release --show-bin-path)
 
 rm -rf "$APP"
@@ -25,6 +26,9 @@ cp -c "$M/golden.img" "$APP/Contents/Resources/seed/golden.img"     # APFS clone
 if [ -f "$ROOT/machine/630/460621-1.BIN" ]; then          # optional: 630 MTG firmware
   mkdir -p "$APP/Contents/Resources/seed/630"
   cp "$ROOT"/machine/630/46062[0-3]-1.BIN "$APP/Contents/Resources/seed/630/"
+fi
+if [ -x "$ROOT/build/630host/bin/layers" ]; then            # optional: 630 layers host
+  cp -R "$ROOT/build/630host" "$APP/Contents/Resources/630host"
 fi
 [ -f "$ROOT/app/Resources/AppIcon.icns" ] && cp "$ROOT/app/Resources/AppIcon.icns" "$APP/Contents/Resources/"
 

@@ -1,7 +1,7 @@
 """End-to-end test of the AT&T 630 MTG emulator against the 3B2 (headless).
 
 Boots the 3B2 from a throwaway APFS clone of golden.img, then runs mtg630's
-link630 on the PORTS line (127.0.0.1:9001): the emulated 630 boots its real
+link630 on the PORTS line (127.0.0.1:9101, spare ports so it runs beside the app): the emulated 630 boots its real
 firmware, then logs in as jay by typing on its emulated keyboard, runs a command
 and waits for its output. The 630 screen is saved as a PNG (path printed).
 
@@ -16,7 +16,7 @@ import time
 import zlib
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from sim3b2 import MACHINE, ROOT, Sim  # noqa: E402
+from sim3b2 import MACHINE, ROOT, Sim, spare_ini  # noqa: E402
 
 LINK = os.path.join(ROOT, "mtg630", "target", "release", "link630")
 ROMS = os.path.join(ROOT, "machine", "630")
@@ -51,7 +51,7 @@ def main():
     out = tempfile.mkdtemp(prefix="att3b2-630-")
     img = "test630.img"
     subprocess.run(["cp", "-c", os.path.join(MACHINE, "golden.img"), os.path.join(MACHINE, img)], check=True)
-    sim = Sim(disk=img, log=open(os.path.join(out, "console.log"), "w"))
+    sim = Sim(ini=spare_ini(out), disk=img, log=open(os.path.join(out, "console.log"), "w"))
     ok = False
     try:
         sim.expect("Console Login:", timeout=600)
@@ -59,7 +59,7 @@ def main():
         time.sleep(5)
         with open(os.path.join(out, "script.txt"), "w") as f:
             f.write(SCRIPT)
-        r = subprocess.run([LINK, ROMS, "127.0.0.1:9001", os.path.join(out, "script.txt"), os.path.join(out, "630")],
+        r = subprocess.run([LINK, ROMS, "127.0.0.1:9101", os.path.join(out, "script.txt"), os.path.join(out, "630")],
                            timeout=900)
         ok = r.returncode == 0 and os.path.exists(os.path.join(out, "630-typed.pbm"))
         if os.path.exists(os.path.join(out, "630-typed.pbm")):

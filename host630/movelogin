@@ -1,0 +1,5 @@
+#!/bin/sh
+# layers calls this to move the login entry in /etc/utmp between ptys (the "who"
+# file). On macOS that needs root and nothing here depends on it, so report
+# success with no previous host name.
+printf -- '-h '

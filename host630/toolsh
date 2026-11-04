@@ -1,0 +1,16 @@
+#!/bin/sh
+# The 630 tools window: a shell on the Mac host, where layers runs. Programs
+# loaded from here (dmdld) run in a 630 window of their own.
+PATH=$DMD/bin:/usr/bin:/bin
+export PATH
+PS1='630 tools$ '
+export PS1
+cat <<'HELP'
+630 tools (Mac host). This window is a local shell, not the 3B2.
+  dmdld $DMD/lib/630bin/eyes.m      load a 630 program into this window
+  ls $DMD/lib/630bin                 more programs (games, clocks, xproof, ...)
+  dmddemo; dmddemo rose               the SDP demos
+  ucache                              cache a program in the terminal
+New windows from the right-button menu are 3B2 lines.
+HELP
+exec /bin/sh -i

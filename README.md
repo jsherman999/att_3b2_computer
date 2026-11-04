@@ -136,23 +136,35 @@ SCN2681s, the mouse, the keyboard, 1024x1024 video and battery RAM. It runs the
 real firmware from bitsavers (`scripts/fetch-630.sh`). Use the **630 MTG**
 toolbar button. It self-tests, draws the desktop, runs menus and windows, and
 its H1 window is a working terminal on the 3B2: log in, run commands, use the
-arrow keys. Not done yet: the 630's own windowing protocol to the host
-(`layers`/xt for the 630 and its downloaded programs) and 630 setup from the
-keyboard (Setup key).
+arrow keys.
+
+**Layers.** Set the window's Host to **Layers** and the 630 becomes a windowing
+terminal: the app runs Dave Dykstra's pseudo-tty `layers` on the Mac (no 630 host
+package for the 3B2 survives, and SVR3.2 has no ptys), and every 630 window is its
+own 3B2 PORTS line with its own `login:` (button-3 menu: New, Reshape, Delete; up
+to 7 windows). A "630 tools" window is a local shell for loading 630 programs:
+`dmdld $DMD/lib/630bin/eyes.m`, games, clocks, `xproof`, the SDP demos.
+`scripts/build-630host.sh` builds the host software (`build-app.sh` runs it);
+`scripts/fetch-assets.sh` fetches it. Not done yet: 630 setup from the keyboard
+(Setup key).
 
 | Symptom | Cause | Fix |
 |---|---|---|
 | no host output | receive interrupts are on DUART OP4, not INTR | wired OP4 to levels 5/4 |
 | windows never drawn | process timers count IP2 strobes | IP2 pulses every frame |
 | typed keys dropped silently | the port "ready" check reads the modem lines (DUART 1 IP4/IP5), and all inputs read high = no carrier | hold IP4/IP5 (and DUART 2 IP3) low |
-| transmitter enabled, then an interrupt storm | TxRDY (OP6) was wired to level 5, but transmit is polled at vertical blank | OP6 not wired |
+| transmitter enabled, then an interrupt storm | TxRDY (OP6) was wired to level 5, whose handler only drains the receiver | OP6 on level 1 (below) |
+| layers windows freeze after a few keystrokes | the 630 stopped partway through an xt packet: transmit only ran at vertical blank (~1 byte per frame) | TxRDYA (OP6) shares level 1 with vertical blank |
 | most keys lost, terminal resets every second | the keyboard answered every 0x84 with its ID; an ID after power-up means "keyboard re-plugged" | ID once after reset |
 | Shift gave control characters, no `s`, Return sent Up-arrow | keymap guessed from the ROM table | every scan code checked with `kbmap630`: Shift 0x1E, Ctrl 0x1D, `s` 0x56, Return 0x5A |
 
 Tests: `scripts/test_630.py` boots the 3B2 headless on a throwaway clone and
 logs in through the 630 core (`mtg630` `link630`) (PASS). `scripts/test_630_app.py`
 does the same in the app's 630 window and confirms on the console that the typed
-command ran (PASS). Details: `docs/630-mtg-notes.md`.
+command ran (PASS). `scripts/test_630_layers.py` runs layers against the headless
+630: logs in on window 1 (checked from the 3B2 console) and loads `eyes` into
+window 2 with `dmdld` (PASS). The 630 tests boot their 3B2 on spare ports
+(9101), so they run alongside the app. Details: `docs/630-mtg-notes.md`.
 
 ### Gotchas found along the way
 

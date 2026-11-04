@@ -43,6 +43,9 @@ struct Channel {
     tx_wait: u64,               // cycles until the holding byte is "sent"
     tx_out: VecDeque<u8>,       // bytes that have left the chip
     overrun: bool,
+    /// THR writes lost: transmitter disabled, or a byte still waiting (debug counters).
+    pub thr_lost_disabled: u64,
+    pub thr_overwritten: u64,
 }
 
 impl Channel {
@@ -329,8 +332,11 @@ impl Duart {
                 let cc = self.char_cycles(ch, false);
                 let c = &mut self.ch[ch];
                 if c.tx_enabled {
+                    if c.tx_holding.is_some() { c.thr_overwritten += 1; }
                     c.tx_holding = Some(v);
                     c.tx_wait = cc;
+                } else {
+                    c.thr_lost_disabled += 1;
                 }
             }
             4 => self.acr = v,
@@ -370,6 +376,13 @@ impl Duart {
             4 => c.overrun = false,
             _ => {}
         }
+    }
+
+    /// Transmitter state of a channel (for debugging stalls).
+    pub fn tx_state(&self, ch: usize) -> String {
+        let c = &self.ch[ch];
+        format!("tx_enabled={} holding={:?} wait={} lost_disabled={} overwritten={} status={:02x}",
+                c.tx_enabled, c.tx_holding, c.tx_wait, c.thr_lost_disabled, c.thr_overwritten, c.status())
     }
 
     /// Short description of how the firmware configured the chip (for logs).

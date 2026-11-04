@@ -1,0 +1,139 @@
+diff --git a/dmdld/dmdld.c b/dmdld/dmdld.c
+index 6bb22ba..977ffff 100644
+--- a/dmdld/dmdld.c
++++ b/dmdld/dmdld.c
+@@ -1215,7 +1215,7 @@ char *argv[];
+ 		buzz();
+ 	}
+ 
+-	sendfile();
++	dmdld_sendfile();
+ 
+ 	/* In nonmux download, the last packets have to be acknowledged 
+ 	*/
+@@ -1287,7 +1287,7 @@ Read(a, n)
+ */
+ int senddummy; /* to force the following into an even address */
+ char sendbuf[DATASIZE+PKTASIZE];
+-sendfile()
++dmdld_sendfile()
+ {
+ 	int i;
+ 	register unsigned n;
+diff --git a/dmdversion/dmdversion.c b/dmdversion/dmdversion.c
+index b64bb52..8d5fda9 100644
+--- a/dmdversion/dmdversion.c
++++ b/dmdversion/dmdversion.c
+@@ -95,7 +95,7 @@ int	forbgs;
+ int	cntlfd;			/* FD for xt control channel */
+ 
+ int eflag, sflag, lflag, tflag, hflag, errflag, iflag;
+-int retval, ttyfd, debug, abort;
++int retval, ttyfd, debug, timedout;
+ 
+ #ifdef NO_TERMIO
+ struct sgttyb	ttysave,	/* save the state of tty */
+@@ -109,7 +109,7 @@ void
+ Time_out ()
+ {
+ 	if (debug)	fprintf(stderr,"Timed out.\n");
+-	abort = 1;
++	timedout = 1;
+ }
+ 
+ main (argc, argv)
+@@ -261,18 +261,18 @@ byescseq()
+ 	int count, lpindex;
+ 	char termid[TERMIDSIZE];
+ 
+-	abort = 0;
++	timedout = 0;
+ 	signal(SIGALRM, Time_out);
+ 	alarm(4);
+ 	write(ttyfd,SENDTERMID,strlen(SENDTERMID));
+ 	count = 0;
+-	while((count == 0 || termid[count-1] != 'c') && !abort){
++	while((count == 0 || termid[count-1] != 'c') && !timedout){
+ 		lpindex = read(ttyfd,&termid[count],TERMIDSIZE-count);
+ 		if(lpindex > 0)  count += lpindex;
+ 	}
+ 	alarm(0);
+ 
+-	if(abort)
++	if(timedout)
+ 		return(-1);
+ 	termid[count-1] = '\0';
+ 	return ( printterm(termid + 3) );
+@@ -284,16 +284,16 @@ lbyescseq()
+ 	int count, lpindex;
+ 	char *dwnldflag;
+ 
+-	count = abort = 0;
++	count = timedout = 0;
+ 	signal(SIGALRM, Time_out);
+ 	alarm(4);
+ 	write(ttyfd,ENC_CHK,strlen(ENC_CHK));
+-	while(count < ENC_LEN && !abort){
++	while(count < ENC_LEN && !timedout){
+ 		lpindex = read(ttyfd,&scr_buf[count],ENC_LEN - count);
+ 		if(lpindex > 0)count += lpindex;
+ 	}
+ 	alarm(0);
+-	if(abort)
++	if(timedout)
+ 		return(-1);
+ 	if(scr_buf[2] == '0')
+ 	{ /* see if the host way is set */
+diff --git a/jx/sysint.c b/jx/sysint.c
+index 2398393..6733eff 100644
+--- a/jx/sysint.c
++++ b/jx/sysint.c
+@@ -46,7 +46,7 @@ char *argv[];
+ 	(void) ioctl( jerqno, TIOCEXCL, 0);
+ #endif
+ 	setbuf(fromjerq,NULL);
+-	listen();
++	jx_listen();
+ #ifdef TIOCNXCL
+ 	(void) ioctl( jerqno, TIOCNXCL , 0);	
+ #endif
+@@ -168,7 +168,7 @@ jfflush()
+ 	}
+ }
+ 
+-listen()
++jx_listen()
+ {
+ 	int n,c,i;
+ 	char filename[1024],buf[1024],mode[2];
+diff --git a/loadfont/loadfont.c b/loadfont/loadfont.c
+index d1c9fb9..7b64499 100644
+--- a/loadfont/loadfont.c
++++ b/loadfont/loadfont.c
+@@ -55,7 +55,7 @@ int qflag;	/* quit */
+ int sflag;	/* stay */
+ int eflag;	/* error */
+ 
+-char *carg;
++char *shellarg;
+ int (*sendpkt)();
+ int muxsendpkt();
+ int nonmuxsendpkt();
+@@ -91,7 +91,7 @@ char **argv;
+ 		switch (c) {
+ 
+ 		case 'c':
+-			carg = "-c";
++			shellarg = "-c";
+ 			break;
+ 
+ 		case 'd':
+@@ -397,7 +397,7 @@ char *s;
+ {
+ 	if(dflag > 1)
+ 		return(1);
+-        if(psystem(pathdmdld, "dmdld", s, carg))
++        if(psystem(pathdmdld, "dmdld", s, shellarg))
+                 return(0);
+         return(1);
+ }

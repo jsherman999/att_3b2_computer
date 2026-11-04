@@ -4,7 +4,10 @@ Status (2026-11-04): `mtg630/` boots the real 630 firmware (bitsavers
 `460620-1` to `460623-1`, CRC-identical to MAME's `att630` set). It passes the
 self-test, draws the desktop, runs the button-3 menu and creates windows. The
 power-on **H1** window is a working terminal on the 3B2: `scripts/test_630.py`
-logs in as jay by typing on the emulated keyboard and runs commands.
+logs in as jay by typing on the emulated keyboard and runs commands. With
+**layers** (pseudo-tty layers on the Mac, see "Layers" below) the 630 is a
+windowing terminal: `scripts/test_630_layers.py` logs in on one window and loads
+a 630 program (`eyes`) into another with `dmdld`.
 
 ## Hardware, as the firmware expects it
 
@@ -31,13 +34,16 @@ dispatcher is at 066C.
 | 4 | DUART 2 OP4, OPCR = 0x50 | Aux EIA receive |
 | 3 | DUART 1 INTR (counter/timer, 60 Hz, ACR = E0) | system tick, counter at 7800AA |
 | 2 | DUART 2 INTR (IP2 change) and DUART 1 **OP5 (RxRDYB)** | mouse strobe *and* keyboard receive |
-| 1 | vertical blank | **transmit**: EED4/F064 -> ECF8 fill THR while TxRDY, then disable the transmitter |
+| 1 | vertical blank *and* DUART 1/2 **OP6 (TxRDYA)** | **transmit**: EED4/F064 -> ECF8 fill THR while TxRDY, then disable the transmitter |
 
 MAME's skeleton driver wires only the DUART INTR pins. The receive interrupt on
 OP4 is why host input appeared to be ignored. The firmware also programs OP6 as
-TxRDYA, but nothing services it at level 5: wiring it there causes an interrupt
-storm the moment the transmitter is enabled, so transmit is left to the
-vertical-blank poll.
+TxRDYA. Its handler is the level-1 one: ECF8 moves the output queue into THR while
+TxRDY is set and disables the transmitter when the queue is empty, which is what
+removes the interrupt. Wiring OP6 to level 5 instead causes an interrupt storm
+(that handler only drains the receiver). With vertical blank alone the terminal sent
+about one byte per frame; plain terminal use survived that, but layers stalled: the
+630 stopped partway through xt packets and never recovered.
 
 ### Modem-control inputs (active low)
 
@@ -111,6 +117,38 @@ arrows Up 0x55 / Down 0x6C / Right 0x0E / Left 0x3A (ANSI `ESC [ A`-`D`), Tab
 0x39, Backspace 0x2E, Esc 0x53, Delete 0x2D. Many keys send `ESC N x` sequences
 (the 630's function keys).
 
+## Layers (the 630 as a windowing terminal)
+
+No 630 host package for the 3B2 survives online (the original came on the
+"Windowing Utilities" and 630 MTG software floppies). What does survive, from Dave
+Dykstra (AT&T) on github.com/dmdmtg: **dmd-layers** (pseudo-tty layers, public
+domain), **freesdp630** (the 630 software development package: dmdld, jx, ...,
+GPL) and **mtg-binaries** (prebuilt 630 programs, little-endian COFF). They need
+pseudo-ttys, which SVR3.2 on the 3B2 lacks, so layers runs on the Mac:
+`scripts/build-630host.sh` builds it into a `$DMD` tree that the app bundles.
+
+- The app runs layers on a pty wired to the 630's Main EIA port (Host: Layers).
+- `SHELL` is `host630/3b2line`, so every window layers opens (the 630's initial
+  window, and New from the button-3 menu) takes its own 3B2 PORTS line: a login
+  prompt per window, up to 7 windows.
+- The startup file (`host630/layersrc`) reshapes window 1 and opens a local
+  "630 tools" shell (`host630/toolsh`) for `dmdld`, `ucache`, `dmddemo`.
+- `host630/compat/macos`: a System V `termio.h` (struct termio and its flag and
+  baud values, TCGETA/TCSETA translated to termios; the tools index tables by
+  `c_cflag & CBAUD`), and STREAMS stubs. `host630/movelogin` replaces the
+  setuid-root utmp helper with one that reports success.
+
+Porting notes (patches/dmd-layers-0001, patches/freesdp630-0001):
+
+- **Apple Silicon passes variadic arguments on the stack.** `Debug()` was called
+  without a prototype, so it read garbage (`(null)` pty names, a bus error with
+  `-d`). It is now prototyped. Everything else undeclared returns int.
+- Old names that collide with libc: `sendfile` (dmdld), `listen` (jx), `abort`
+  (dmdversion), `carg` (loadfont), `log` (layers trace.c). Renamed.
+- `cntrlspeed()` uses `cfgetospeed()` where there is no CBAUD.
+- freesdp630 has files whose names differ only in case; on a case-insensitive
+  disk one of each pair is missing. Only terminal-side sources are affected.
+
 ## Tools
 
 - `mtg630/src/bin/boot630.rs`: headless boot with a timed event script
@@ -121,6 +159,9 @@ arrows Up 0x55 / Down 0x6C / Right 0x0E / Left 0x3A (ANSI `ESC [ A`-`D`), Tab
 - `mtg630/src/bin/kbmap630.rs`: presses every scan code and records the
   host-port output (`GAPMS`, `TIMELINE=1`).
 - `mtg630/src/bin/link630.rs`: the 630 on a TCP host (the 3B2's PORTS line),
-  driven by an expect/type script. Used by `scripts/test_630.py`.
+  driven by an expect/type script. Used by `scripts/test_630.py` and
+  `scripts/test_630_layers.py`. `pcs MS` samples the PC and interrupt mask, `duart`
+  prints the Main EIA transmitter state, `KBDCMDS=1` lists keyboard commands,
+  `BRAMDUMP=1` prints the per-port flow-control setup bytes.
 - Disassemble with capstone: `machine/630/rom630.bin` (the interleaved image)
   produces `rom630.dis`.

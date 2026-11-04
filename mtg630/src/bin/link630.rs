@@ -7,6 +7,7 @@
 //!   type TEXT       type TEXT on the keyboard; \r \t \e \\ escapes
 //!   sleep MS        run for MS milliseconds
 //!   snap NAME       write <out-prefix>-NAME.pbm
+//!   pcs MS          sample the CPU's PC for MS milliseconds (where is it stuck?)
 //! Exits 0 when every step succeeded, 1 on a timeout.
 use mtg630::{interleave_roms, keymap, Mtg630, CPU_HZ, VRAM_BYTES};
 use std::io::{ErrorKind, Read, Write};
@@ -79,6 +80,14 @@ fn main() {
     let mut l = Link { t, sock, seen: Vec::new(), cursor: 0 };
     println!("booting the 630");
     l.run(30_000);
+    if env::var("BRAMDUMP").is_ok() {
+        // Per-host setup records: 0x21 BRAM bytes (0x42 bus bytes) each, from E00041.
+        for h in 0..4 {
+            // E00069 + 0x42*port: XON/XOFF; E0006D + 0x42*port: keep XON/XOFF in layers (F3D4)
+            let at = |a: usize| l.t.bus.bram[((a + 0x42 * h) & 0x3fff) >> 1];
+            println!("  port {h}: E00069 xon/xoff={:02x}  E0006D in-layers={:02x}", at(0xe00069), at(0xe0006d));
+        }
+    }
     let script = fs::read_to_string(&a[3]).expect("script");
     for line in script.lines().filter(|l| !l.trim().is_empty() && !l.starts_with('#')) {
         let (cmd, arg) = line.split_once(' ').unwrap_or((line, ""));
@@ -111,6 +120,26 @@ fn main() {
                 println!("typed {arg:?}");
             }
             "sleep" => l.run(arg.parse().unwrap()),
+            "duart" => {
+                println!("  {}", l.t.bus.duart1.describe());
+                println!("  main EIA {}", l.t.bus.duart1.tx_state(0));
+                let crs: Vec<String> = l.t.bus.duart1.cr_log.iter().filter(|e| e.0 == 0).map(|e| format!("{:02x}", e.1)).collect();
+                println!("  channel A commands (first {}): {}", crs.len(), crs.join(" "));
+            }
+            "pcs" => {
+                // pcs MS: sample the PC for MS milliseconds and print the busiest addresses
+                let mut hits = std::collections::BTreeMap::<u32, u64>::new();
+                let mut srs = std::collections::BTreeMap::<u16, u64>::new();
+                for _ in 0..arg.parse::<u64>().unwrap() * 10 {
+                    l.t.run(CPU_HZ / 10_000);
+                    *hits.entry(l.t.pc() & !0xf).or_default() += 1;
+                    *srs.entry(l.t.sr() & 0x0700).or_default() += 1;
+                }
+                println!("  interrupt mask samples: {srs:x?}");
+                let mut v: Vec<_> = hits.into_iter().collect();
+                v.sort_by(|a, b| b.1.cmp(&a.1));
+                for (pc, n) in v.iter().take(12) { println!("  pc {pc:06x}.. x{n}"); }
+            }
             "snap" => {
                 let mut pbm = b"P4\n1024 1024\n".to_vec();
                 pbm.extend_from_slice(&l.t.bus.vram[..VRAM_BYTES]);
@@ -120,6 +149,9 @@ fn main() {
             }
             other => println!("unknown step {other}"),
         }
+    }
+    if env::var("KBDCMDS").is_ok() {
+        for (at, c) in &l.t.keyboard_cmds { println!("  kbd cmd {:8.3}s {c:02x}", *at as f64 / CPU_HZ as f64); }
     }
     println!("host output tail: {:?}", String::from_utf8_lossy(&l.seen[l.seen.len().saturating_sub(400)..]));
 }

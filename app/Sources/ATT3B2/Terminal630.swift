@@ -3,14 +3,17 @@ import CDMD
 import Foundation
 import Observation
 
-/// An AT&T 630 MTG (experimental: mtg630 core). Like the 5620 it takes the next free
-/// PORTS line on 127.0.0.1:9001, wired to the 630's Main EIA port.
-///
-/// Status: the firmware self-tests, draws its desktop, runs menus and windows, and
-/// shows host output in its H1 window. Keyboard input does not reach the host yet.
+/// An AT&T 630 MTG (mtg630 core) on its Main EIA port. Two hosts:
+/// - `.line`: like the 5620, the next free PORTS line on 127.0.0.1:9001 (one terminal).
+/// - `.layers`: pseudo-tty layers on the Mac (Layers630), the 630's windowing host;
+///   every 630 window is then its own 3B2 PORTS line.
 @Observable
 final class Terminal630: @unchecked Sendable {
-    enum Link: Equatable { case disconnected, connecting, connected, noROMs }
+    enum Link: Equatable { case disconnected, connecting, connected, layers, layersExited, noLayers, noROMs }
+    enum Host: String, CaseIterable, Identifiable {
+        case line = "3B2 Line", layers = "Layers"
+        var id: String { rawValue }
+    }
 
     static let shared = Terminal630()
 
@@ -20,6 +23,13 @@ final class Terminal630: @unchecked Sendable {
     private let stateLock = NSLock()
     private var running = false
     private var fd: Int32 = -1
+    // Guarded by stateLock: the host the UI asked for, and whether layers should be
+    // (re)started. After layers exits it stays down until startLayers().
+    private var host: Host = .line
+    private var layersWanted = false
+    private var hostChanged = false
+    private var layersPid: pid_t = 0
+    private var startedAt = Date()
     private var mouseX: UInt16 = 2048
     private var mouseY: UInt16 = 2048
     private var buttons: UInt8 = 0
@@ -50,6 +60,7 @@ final class Terminal630: @unchecked Sendable {
         stateLock.lock(); defer { stateLock.unlock() }
         guard !running else { return }
         running = true
+        startedAt = Date()
         let t = Thread { [weak self] in self?.loop() }
         t.name = "AT&T 630 MTG"
         t.qualityOfService = .userInteractive
@@ -61,7 +72,25 @@ final class Terminal630: @unchecked Sendable {
         saveBRAM()
     }
 
-    func resetTerminal() { if let handle { att630_reset(handle) } }
+    func resetTerminal() {
+        if let handle { att630_reset(handle) }
+        stateLock.lock(); startedAt = Date(); if host == .layers { hostChanged = true; layersWanted = true }; stateLock.unlock()
+    }
+
+    /// Switch hosts; the engine thread drops the current link and opens the new one.
+    func setHost(_ h: Host) {
+        stateLock.lock(); defer { stateLock.unlock() }
+        guard h != host else { return }
+        host = h
+        layersWanted = h == .layers
+        hostChanged = true
+    }
+
+    /// Start layers again after it exited (the 630's Exit menu item, or a crash).
+    func startLayers() {
+        stateLock.lock(); defer { stateLock.unlock() }
+        if host == .layers { layersWanted = true }
+    }
 
     // MARK: Input
 
@@ -262,20 +291,69 @@ final class Terminal630: @unchecked Sendable {
             let micros = UInt32(min(50_000, max(1, now.timeIntervalSince(last) * 1_000_000)))
             last = now
             att630_run(handle, micros)
-            if fd < 0, now.timeIntervalSince(lastConnect) > 1 { lastConnect = now; connect() }
+
+            stateLock.lock()
+            let host = self.host, changed = hostChanged, wantLayers = layersWanted, booted = now.timeIntervalSince(startedAt) > 10
+            hostChanged = false
+            stateLock.unlock()
+            if changed { dropLink() }
+            if fd < 0, now.timeIntervalSince(lastConnect) > 1 {
+                lastConnect = now
+                switch host {
+                case .line: connect()
+                // layers asks the terminal to identify itself at once: wait out the self-test.
+                case .layers where wantLayers && booted: launchLayers()
+                case .layers: break
+                }
+            }
             if fd >= 0 {
                 let n = read(fd, &rx, rx.count)
                 if n > 0 {
                     rx.withUnsafeBufferPointer { att630_host_rx(handle, $0.baseAddress, n) }
                 } else if n == 0 || (n < 0 && errno != EAGAIN) {
-                    close(fd); fd = -1; DispatchQueue.main.async { self.link = .disconnected }
+                    // A pty master reads EIO once layers and its windows have all exited.
+                    let wasLayers = layersPid > 0
+                    dropLink()
+                    if wasLayers {
+                        stateLock.lock(); layersWanted = false; stateLock.unlock()
+                        DispatchQueue.main.async { self.link = .layersExited }
+                    } else {
+                        DispatchQueue.main.async { self.link = .disconnected }
+                    }
                 }
             }
             let m = tx.withUnsafeMutableBufferPointer { att630_host_tx(handle, $0.baseAddress, $0.count) }
             if m > 0, fd >= 0 { _ = tx.withUnsafeBufferPointer { write(fd, $0.baseAddress, m) } }
             usleep(2_000)
         }
-        if fd >= 0 { close(fd); fd = -1 }
+        dropLink()
+    }
+
+    /// Close the current link; for layers, hang it up and reap it.
+    private func dropLink() {
+        if layersPid > 0 {
+            Layers630.stop(fd: fd, pid: layersPid)
+            layersPid = 0
+        } else if fd >= 0 {
+            close(fd)
+        }
+        fd = -1
+    }
+
+    private func launchLayers() {
+        guard Layers630.available else {
+            stateLock.lock(); layersWanted = false; stateLock.unlock()
+            DispatchQueue.main.async { self.link = .noLayers }
+            return
+        }
+        guard let spawned = Layers630.spawn() else {
+            stateLock.lock(); layersWanted = false; stateLock.unlock()
+            DispatchQueue.main.async { self.link = .layersExited }
+            return
+        }
+        fd = spawned.fd
+        layersPid = spawned.pid
+        DispatchQueue.main.async { self.link = .layers }
     }
 
     private func connect() {

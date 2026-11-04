@@ -12,6 +12,20 @@ MACHINE = os.path.join(ROOT, "machine", "700")
 PROMPT = "SIMSH> "
 
 
+def spare_ini(directory, ports=9101, telnet=2424, ftp=2222):
+    """Write a copy of base.ini whose host ports don't collide with a running app.
+
+    The app's simulator holds 127.0.0.1:9001 (PORTS), 2323 and 2121; tests that boot
+    their own 3B2 use this so they can run alongside it. Returns the .ini path.
+    """
+    base = open(os.path.join(ROOT, "config", "base.ini")).read()
+    ini = os.path.join(directory, "spare.ini")
+    with open(ini, "w") as f:
+        f.write(base.replace("127.0.0.1:9001", f"127.0.0.1:{ports};notelnet")
+                .replace("tcp=2323:", f"tcp={telnet}:").replace("tcp=2121:", f"tcp={ftp}:"))
+    return ini
+
+
 class Sim:
     def __init__(self, ini=os.path.join(ROOT, "config", "base.ini"), log=sys.stdout, disk="disk0.img", idle=True):
         # idle=False keeps the CPU spinning; installs use it because floppy I/O has hung

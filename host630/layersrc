@@ -1,0 +1,11 @@
+# Startup file for layers on the 630 (layers -f). Coordinates are 630 pixels,
+# 0,0 at the top left of the 1024x1024 screen. Each window's program runs as
+# "$SHELL -c COMMAND", and SHELL is 3b2line, so a window with no command is a
+# new 3B2 terminal line (a fresh login: prompt).
+autodelete on
+autocurrent on
+# Channel 1 is the window the 630 makes when layers starts: a 3B2 line.
+reshape 1 6 6 1017 700
+# Channel 2: a local shell on the Mac with the 630 tools (dmdld, ucache, ...).
+new 6 706 1017 1017 exec $DMD/lib/toolsh
+current 1

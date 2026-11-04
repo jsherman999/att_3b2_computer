@@ -10,6 +10,7 @@ for f in "$ROOT/vendor/simh/BIN/3b2-700" "$M/3b2_700.bin" "$M/nvram.bin" "$M/tod
   [ -f "$f" ] || { echo "missing $f — run scripts/fetch-assets.sh and the phase 1 install first" >&2; exit 1; }
 done
 
+( cd "$ROOT/dmd_ffi" && cargo build --release )        # libatt_dmd.a: the DMD 5620 core
 ( cd "$ROOT/app" && swift build -c release )
 BIN=$(cd "$ROOT/app" && swift build -c release --show-bin-path)
 

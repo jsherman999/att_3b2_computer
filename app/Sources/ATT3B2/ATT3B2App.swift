@@ -33,6 +33,11 @@ struct ATT3B2App: App {
             }
         }
 
+        Window("AT&T DMD 5620 Terminal", id: "dmd5620") {
+            DMDWindow(terminal: DMDTerminal.shared)
+        }
+        .defaultSize(width: 660, height: 860)
+
         Settings {
             SettingsView()
         }
@@ -72,6 +77,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
 struct ConsoleWindow: View {
     let machine: Machine
+    @Environment(\.openWindow) private var openWindow
     @AppStorage("phosphor") private var phosphor: Phosphor = .green
     @AppStorage("fontSize") private var fontSize: Double = 14
     @AppStorage("scanlines") private var scanlines = true
@@ -111,9 +117,15 @@ struct ConsoleWindow: View {
 
                 Button { showSnapshots = true } label: { Label("Snapshots", systemImage: "externaldrive.badge.timemachine") }
                     .help("Save or restore the hard disk")
+
+                OpenDMDButton()
             }
         }
         .sheet(isPresented: showSnapshotsBinding) { SnapshotSheet(machine: machine) }
+        .onAppear {
+            // `-openDMD YES` opens the 5620 at launch (used for testing).
+            if UserDefaults.standard.bool(forKey: "openDMD") { openWindow(id: "dmd5620") }
+        }
         .alert("3B2", isPresented: Binding(get: { machine.lastError != nil }, set: { if !$0 { machine.lastError = nil } })) {
             Button("OK") { machine.lastError = nil }
         } message: {
@@ -221,5 +233,14 @@ struct SettingsView: View {
         }
         .padding(20)
         .frame(width: 380)
+    }
+}
+
+/// Opens the DMD 5620 window (a separate scene, so it needs the openWindow action).
+struct OpenDMDButton: View {
+    @Environment(\.openWindow) private var openWindow
+    var body: some View {
+        Button { openWindow(id: "dmd5620") } label: { Label("DMD 5620", systemImage: "rectangle.portrait.on.rectangle.portrait") }
+            .help("Open the AT&T DMD 5620 bitmapped terminal on a PORTS line")
     }
 }

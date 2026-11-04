@@ -1,0 +1,18 @@
+[package]
+name = "att_dmd"
+version = "0.1.0"
+edition = "2021"
+description = "C ABI wrapper around dmd_core (AT&T DMD 5620 emulator core) for ATT3B2.app"
+license = "MIT"
+
+[lib]
+crate-type = ["staticlib"]
+
+[dependencies]
+# Seth Morabito's DMD 5620 core: WE32100 CPU, firmware 8;7;5 ROM, DUART, mouse, video.
+dmd_core = { git = "https://github.com/dmdmtg/dmd_core", rev = "d08a593" }
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1

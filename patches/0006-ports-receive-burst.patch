@@ -1,0 +1,47 @@
+diff --git a/3B2/3b2_ports.c b/3B2/3b2_ports.c
+index d8e5a9c..871d5d8 100644
+--- a/3B2/3b2_ports.c
++++ b/3B2/3b2_ports.c
+@@ -78,6 +78,7 @@
+ 
+ #define PPQESIZE      12
+ #define DELAY_ASYNC   25
++#define PORTS_RCV_BURST 64      /* att3b2: max chars taken per line per poll */
+ #define DELAY_DLM     100
+ #define DELAY_ULM     100
+ #define DELAY_FCF     100
+@@ -755,9 +756,22 @@ t_stat ports_rcv_svc(UNIT *uptr)
+             /* Disconnect a connected line, it has been dropped */
+             ports_update_conn(LSLOT(ln), LPORT(ln));
+         } else if (ports_ldsc[ln].conn && ports_state[ln].conn) {
+-            temp = tmxr_getc_ln(&ports_ldsc[ln]);
++            /* att3b2: drain up to PORTS_RCV_BURST characters per poll instead of one.
++             * One per clock tick (100/s) made a terminal's 11-byte ID reply take over
++             * 100 ms, longer than layers waits. Only take a character from the line
++             * when the host has a receive buffer posted, so none are dropped. */
++            int n;
++            for (n = 0; n < PORTS_RCV_BURST; n++) {
++                if (cio[slot].ivec == 0 ||
++                    !cio_rqueue_avail(slot, PORTS_RCV_QUEUE, PPQESIZE)) {
++                    break;
++                }
++
++                temp = tmxr_getc_ln(&ports_ldsc[ln]);
+ 
+-            if (temp && !(temp & SCPE_BREAK)) {
++                if (!(temp & TMXR_VALID) || (temp & SCPE_BREAK)) {
++                    break;
++                }
+ 
+                 c = (char) (temp & 0xff);
+ 
+@@ -769,8 +783,7 @@ t_stat ports_rcv_svc(UNIT *uptr)
+                     c = 0xa;
+                 }
+ 
+-                if (cio[slot].ivec > 0 &&
+-                    cio_rqueue(slot, PORTS_RCV_QUEUE,
++                if (cio_rqueue(slot, PORTS_RCV_QUEUE,
+                                PPQESIZE, &rentry, rapp_data) == SCPE_OK) {
+                     CIO_SET_INT(slot);
+ 

@@ -22,6 +22,9 @@ enum DebugCapture {
                 }
                 try? "\(Machine.shared.state.rawValue)\n".write(to: url.appendingPathComponent("state.txt"),
                                                                  atomically: true, encoding: .utf8)
+                writeDMDScreen(to: url.appendingPathComponent("dmd.png"))
+                try? "\(DMDTerminal.shared.link)\n".write(to: url.appendingPathComponent("dmd-link.txt"),
+                                                            atomically: true, encoding: .utf8)
                 runCommands(in: url)
             }
         }
@@ -42,8 +45,45 @@ enum DebugCapture {
             case "plug": m.forceOff()
             case "snapshot": m.takeSnapshot(named: rest)
             case "type": m.console?.sendBytes(Array(rest.replacingOccurrences(of: "\\r", with: "\r").utf8))
+            case "dmdtype":       // keystrokes on the 5620 keyboard
+                for b in rest.replacingOccurrences(of: "\\r", with: "\r").utf8 { DMDTerminal.shared.key(b) }
+            case "dmdclick":      // dmdclick x y button  (5620 coordinates, y from the bottom)
+                let f = rest.split(separator: " ").compactMap { Int($0) }
+                if f.count == 3 {
+                    DMDTerminal.shared.mouseMove(x: f[0], y: f[1])
+                    DMDTerminal.shared.mouseDown(UInt8(f[2]))
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { DMDTerminal.shared.mouseUp(UInt8(f[2])) }
+                }
+            case "dmdpress":      // dmdpress x y button: hold the button (menus), dmdrelease to let go
+                let f = rest.split(separator: " ").compactMap { Int($0) }
+                if f.count == 3 { DMDTerminal.shared.mouseMove(x: f[0], y: f[1]); DMDTerminal.shared.mouseDown(UInt8(f[2])) }
+            case "dmdmove":
+                let f = rest.split(separator: " ").compactMap { Int($0) }
+                if f.count == 2 { DMDTerminal.shared.mouseMove(x: f[0], y: f[1]) }
+            case "dmdrelease":
+                if let b = UInt8(rest) { DMDTerminal.shared.mouseUp(b) }
             default: break
             }
         }
+    }
+
+    /// The 5620 screen straight from video RAM (always current, unlike view caching).
+    private static func writeDMDScreen(to url: URL) {
+        var vram = [UInt8](repeating: 0, count: 100 * 1024)
+        let dol = vram.withUnsafeMutableBufferPointer { DMDTerminal.shared.copyScreen(into: $0.baseAddress!) }
+        var gray = [UInt8](repeating: 0, count: 800 * 1024)
+        for i in 0..<(100 * 1024) {
+            let b = vram[i]
+            for bit in 0..<8 {
+                let on = (b >> (7 - UInt8(bit))) & 1 == 1
+                gray[i * 8 + bit] = (on != dol) ? 230 : 20
+            }
+        }
+        guard let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: 800, pixelsHigh: 1024, bitsPerSample: 8,
+                                         samplesPerPixel: 1, hasAlpha: false, isPlanar: false,
+                                         colorSpaceName: .deviceWhite, bytesPerRow: 800, bitsPerPixel: 8),
+              let dst = rep.bitmapData else { return }
+        gray.withUnsafeBytes { dst.update(from: $0.bindMemory(to: UInt8.self).baseAddress!, count: gray.count) }
+        try? rep.representation(using: .png, properties: [:])?.write(to: url)
     }
 }

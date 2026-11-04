@@ -38,6 +38,10 @@ PACKAGES = {
     "nfs": lambda: imgs("TCP-IP_Networking/System_V_NFS_3-2-4_*.img"),
     "termfilt": lambda: imgs("System_V_Release_3.2/Terminal_Filter_Utilities.img"),
     "dwb": lambda: imgs("Documenters_Workbench/*.img"),
+    "dmdcore": lambda: imgs("DMD_Utilities/DMD_Core_Utilities_*.img"),
+    "dmdapdev": lambda: imgs("DMD_Utilities/DMD_Application_Development_Utilities_*.img"),
+    "dmdtext": lambda: imgs("DMD_Utilities/DMD_Text_Graphics_Utilities_*.img"),
+    "dmdfonts": lambda: imgs("DMD_Utilities/DMD_Optional_Fonts_*.img"),
     "wwb": lambda: imgs("Writers_Workbench/*.img"),
     "fortran": lambda: imgs("Development_Tools/Other_Languages/Fortran_*.img"),
     "pascal": lambda: imgs("Development_Tools/Other_Languages/Pascal_*.img"),
@@ -70,6 +74,7 @@ ANSWERS = {
         (r"RFS enabled \? \[y, n\]: $", ["n"]),
         (r"how many pseudo ttys .*\[1-64\]: $", ["32"]),
     ],
+    "dmdcore": [(r"number of DMDs on your system \(must be between 1 and 8\):\s*$", ["4"])],
     "nsu": [(r"number of pseudo terminal devices \[0 - 256\]: $", ["32"])],
     "dwb": [
         (r"read the PACKAGE DESCRIPTION FILE.*\[y, n\] $", ["n"]),
@@ -84,6 +89,7 @@ ANSWERS = {
 GENERIC = [
     (r"Type 'y' to [^\n]*\n?[^\n]*'n' to [^\n]*: *$", ["y"]),
     (r"\(yes or no\): *$", ["yes"]),
+    (r"Type 'y' to continue or 'q' to quit:\s*$", ["y"]),
     (r"(?s)PACKAGE DESCRIPTION FILE.{0,80}\[y, n\] $", ["n"]),
     (r"HIT CARRIAGE RETURN", [""]),
 ]
@@ -113,6 +119,7 @@ def install(s, name, images):
     disk = 0
     buf = ""        # console text since we last answered something
     quiet = 0.0     # seconds since the console last produced output
+    repeats = {}    # line -> count, to catch retry loops
     answers = [(re.compile(rx, re.I), list(replies)) for rx, replies in ANSWERS.get(name, []) + GENERIC]
     generic = [(NEXT_DISK, "disk"), (YES_NO, "y"), (PRESS_RETURN, "")]
     while True:
@@ -120,8 +127,17 @@ def install(s, name, images):
         # judge the whole prompt, so a partial "[y, n]" can't trigger the wrong answer.
         got = False
         try:
-            buf += s.p.read_nonblocking(4096, timeout=1.5)
+            chunk = s.p.read_nonblocking(4096, timeout=1.5)
+            buf += chunk
             quiet, got = 0.0, True
+            # Guard against installers stuck in a retry loop (output never goes quiet,
+            # so the silence checks below can't fire): same line over and over.
+            for line in chunk.splitlines():
+                line = line.strip()
+                if len(line) > 8:
+                    repeats[line] = repeats.get(line, 0) + 1
+                    if repeats[line] > 50:
+                        raise SystemExit(f"{name}: installer is looping on {line!r}")
         except pexpect.TIMEOUT:
             quiet += 1.5
         m = re.search(r"INSTALL-EXIT=(\d+)", buf)

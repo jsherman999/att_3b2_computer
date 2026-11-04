@@ -5,3 +5,5 @@ machine/
 .DS_Store
 .venv/
 *.log
+.build/
+build/

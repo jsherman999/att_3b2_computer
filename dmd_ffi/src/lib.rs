@@ -147,3 +147,120 @@ pub extern "C" fn att_dmd_get_nvram(h: *mut AttDmd, out: *mut u8) {
         unsafe { std::ptr::copy_nonoverlapping(nv.as_ptr(), out, n) };
     });
 }
+
+// ---------------------------------------------------------------------------
+// AT&T 630 MTG (mtg630 crate). Experimental: the firmware boots, draws, runs
+// windows and shows host output; keyboard-to-host input is not working yet.
+// ---------------------------------------------------------------------------
+
+use mtg630::{interleave_roms, Mtg630, BRAM_BYTES, CPU_HZ, VRAM_BYTES};
+
+pub struct Att630 {
+    t: Mutex<Mtg630>,
+}
+
+fn with630<R>(h: *mut Att630, f: impl FnOnce(&mut Mtg630) -> R) -> Option<R> {
+    if h.is_null() {
+        return None;
+    }
+    let handle = unsafe { &*h };
+    let mut t = handle.t.lock().ok()?;
+    Some(f(&mut t))
+}
+
+/// Create a 630 from its four 64 KB EPROM images (460621, 460620, 460623, 460622).
+/// `bram` (8 KB, may be NULL) restores the setup options; NULL = factory defaults.
+#[no_mangle]
+pub extern "C" fn att630_create(r621: *const u8, r620: *const u8, r623: *const u8, r622: *const u8,
+                                bram: *const u8) -> *mut Att630 {
+    if r621.is_null() || r620.is_null() || r623.is_null() || r622.is_null() {
+        return std::ptr::null_mut();
+    }
+    let s = |p: *const u8| unsafe { std::slice::from_raw_parts(p, 0x10000) };
+    let mut t = Mtg630::new(interleave_roms(s(r621), s(r620), s(r623), s(r622)));
+    if bram.is_null() {
+        t.bus.bram.iter_mut().for_each(|b| *b = 0xff); // invalid checksum -> defaults
+    } else {
+        t.bus.bram.copy_from_slice(unsafe { std::slice::from_raw_parts(bram, BRAM_BYTES) });
+    }
+    t.reset();
+    Box::into_raw(Box::new(Att630 { t: Mutex::new(t) }))
+}
+
+#[no_mangle]
+pub extern "C" fn att630_destroy(h: *mut Att630) {
+    if !h.is_null() {
+        unsafe { drop(Box::from_raw(h)) };
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn att630_reset(h: *mut Att630) {
+    with630(h, |t| t.reset());
+}
+
+/// Run for `micros` microseconds of 630 time (10 MHz 68000).
+#[no_mangle]
+pub extern "C" fn att630_run(h: *mut Att630, micros: u32) {
+    with630(h, |t| t.run(CPU_HZ * micros as u64 / 1_000_000));
+}
+
+/// Copy the 1024x1024 1-bit screen (128 KB, MSB first; a set bit is dark).
+#[no_mangle]
+pub extern "C" fn att630_copy_video(h: *mut Att630, out: *mut u8, len: usize) {
+    with630(h, |t| {
+        let n = len.min(VRAM_BYTES);
+        if !out.is_null() {
+            unsafe { std::ptr::copy_nonoverlapping(t.bus.vram.as_ptr(), out, n) };
+        }
+    });
+}
+
+/// Bytes from the host arriving on the Main EIA port.
+#[no_mangle]
+pub extern "C" fn att630_host_rx(h: *mut Att630, data: *const u8, len: usize) {
+    if data.is_null() {
+        return;
+    }
+    let b = unsafe { std::slice::from_raw_parts(data, len) };
+    with630(h, |t| t.bus.duart1.receive(0, b));
+}
+
+/// Bytes the 630 sent to the host on the Main EIA port.
+#[no_mangle]
+pub extern "C" fn att630_host_tx(h: *mut Att630, out: *mut u8, max: usize) -> usize {
+    with630(h, |t| {
+        let v = t.bus.duart1.take_transmitted(0);
+        let n = v.len().min(max);
+        if !out.is_null() {
+            unsafe { std::ptr::copy_nonoverlapping(v.as_ptr(), out, n) };
+        }
+        n
+    })
+    .unwrap_or(0)
+}
+
+/// Keyboard scan code 0x00-0x7f (98-key keyboard, type 0x11).
+#[no_mangle]
+pub extern "C" fn att630_key(h: *mut Att630, code: u8, down: bool) {
+    with630(h, |t| t.key(code, down));
+}
+
+/// Mouse counters (12 bit; the firmware tracks their changes) and buttons
+/// (bit 0 = button 1, bit 1 = button 2, bit 2 = button 3).
+#[no_mangle]
+pub extern "C" fn att630_mouse(h: *mut Att630, x: u16, y: u16, buttons: u8) {
+    with630(h, |t| {
+        t.bus.mouse_x = x & 0x0fff;
+        t.bus.mouse_y = y & 0x0fff;
+        t.bus.buttons = buttons & 7;
+    });
+}
+
+#[no_mangle]
+pub extern "C" fn att630_get_bram(h: *mut Att630, out: *mut u8) {
+    if out.is_null() {
+        return;
+    }
+    with630(h, |t| unsafe { std::ptr::copy_nonoverlapping(t.bus.bram.as_ptr(), out, BRAM_BYTES) });
+}

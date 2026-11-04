@@ -38,6 +38,11 @@ struct ATT3B2App: App {
         }
         .defaultSize(width: 660, height: 860)
 
+        Window("AT&T 630 MTG (experimental)", id: "mtg630") {
+            Window630(terminal: Terminal630.shared)
+        }
+        .defaultSize(width: 860, height: 900)
+
         Settings {
             SettingsView()
         }
@@ -125,6 +130,7 @@ struct ConsoleWindow: View {
         .onAppear {
             // `-openDMD YES` opens the 5620 at launch (used for testing).
             if UserDefaults.standard.bool(forKey: "openDMD") { openWindow(id: "dmd5620") }
+            if UserDefaults.standard.bool(forKey: "open630") { openWindow(id: "mtg630") }
         }
         .alert("3B2", isPresented: Binding(get: { machine.lastError != nil }, set: { if !$0 { machine.lastError = nil } })) {
             Button("OK") { machine.lastError = nil }
@@ -242,5 +248,7 @@ struct OpenDMDButton: View {
     var body: some View {
         Button { openWindow(id: "dmd5620") } label: { Label("DMD 5620", systemImage: "rectangle.portrait.on.rectangle.portrait") }
             .help("Open the AT&T DMD 5620 bitmapped terminal on a PORTS line")
+        Button { openWindow(id: "mtg630") } label: { Label("630 MTG", systemImage: "square.on.square") }
+            .help("Open the AT&T 630 MTG terminal (experimental)")
     }
 }

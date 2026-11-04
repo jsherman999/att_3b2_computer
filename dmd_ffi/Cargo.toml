@@ -11,6 +11,8 @@ crate-type = ["staticlib"]
 [dependencies]
 # Seth Morabito's DMD 5620 core: WE32100 CPU, firmware 8;7;5 ROM, DUART, mouse, video.
 dmd_core = { git = "https://github.com/dmdmtg/dmd_core", rev = "d08a593" }
+# AT&T 630 MTG core (this repo): exported below as att630_*.
+mtg630 = { path = "../mtg630" }
 
 [profile.release]
 opt-level = 3

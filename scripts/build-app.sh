@@ -22,6 +22,10 @@ for b in "$BIN"/*.bundle; do [ -e "$b" ] && cp -R "$b" "$APP/Contents/Resources/
 cp "$ROOT/vendor/simh/BIN/3b2-700" "$APP/Contents/Resources/sim/"
 cp "$M/3b2_700.bin" "$M/nvram.bin" "$M/tod.bin" "$APP/Contents/Resources/seed/"
 cp -c "$M/golden.img" "$APP/Contents/Resources/seed/golden.img"     # APFS clone: no extra space
+if [ -f "$ROOT/machine/630/460621-1.BIN" ]; then          # optional: 630 MTG firmware
+  mkdir -p "$APP/Contents/Resources/seed/630"
+  cp "$ROOT"/machine/630/46062[0-3]-1.BIN "$APP/Contents/Resources/seed/630/"
+fi
 [ -f "$ROOT/app/Resources/AppIcon.icns" ] && cp "$ROOT/app/Resources/AppIcon.icns" "$APP/Contents/Resources/"
 
 cat > "$APP/Contents/Info.plist" <<'EOF'

@@ -23,6 +23,7 @@ enum DebugCapture {
                 try? "\(Machine.shared.state.rawValue)\n".write(to: url.appendingPathComponent("state.txt"),
                                                                  atomically: true, encoding: .utf8)
                 writeDMDScreen(to: url.appendingPathComponent("dmd.png"))
+                write630Screen(to: url.appendingPathComponent("630.png"))
                 try? "\(DMDTerminal.shared.link)\n".write(to: url.appendingPathComponent("dmd-link.txt"),
                                                             atomically: true, encoding: .utf8)
                 runCommands(in: url)
@@ -90,6 +91,22 @@ enum DebugCapture {
         guard let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: 800, pixelsHigh: 1024, bitsPerSample: 8,
                                          samplesPerPixel: 1, hasAlpha: false, isPlanar: false,
                                          colorSpaceName: .deviceWhite, bytesPerRow: 800, bitsPerPixel: 8),
+              let dst = rep.bitmapData else { return }
+        gray.withUnsafeBytes { dst.update(from: $0.bindMemory(to: UInt8.self).baseAddress!, count: gray.count) }
+        try? rep.representation(using: .png, properties: [:])?.write(to: url)
+    }
+
+    private static func write630Screen(to url: URL) {
+        guard Terminal630.shared.available else { return }
+        var vram = [UInt8](repeating: 0, count: 128 * 1024)
+        vram.withUnsafeMutableBufferPointer { Terminal630.shared.copyScreen(into: $0.baseAddress!) }
+        var gray = [UInt8](repeating: 0, count: 1024 * 1024)
+        for i in 0..<(128 * 1024) {
+            for bit in 0..<8 { gray[i * 8 + bit] = (vram[i] >> (7 - UInt8(bit))) & 1 == 1 ? 20 : 230 }
+        }
+        guard let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: 1024, pixelsHigh: 1024, bitsPerSample: 8,
+                                         samplesPerPixel: 1, hasAlpha: false, isPlanar: false,
+                                         colorSpaceName: .deviceWhite, bytesPerRow: 1024, bitsPerPixel: 8),
               let dst = rep.bitmapData else { return }
         gray.withUnsafeBytes { dst.update(from: $0.bindMemory(to: UInt8.self).baseAddress!, count: gray.count) }
         try? rep.representation(using: .png, properties: [:])?.write(to: url)

@@ -129,6 +129,16 @@ runs commands, and confirms on the console that they ran (PASS).
 `scripts/check-patches.sh` runs from `build-app.sh` and fails the build if a
 vendored change is missing from `patches/`.
 
+## Phase 4 status (2026-11-03): 630 MTG, experimental
+
+`mtg630/` is a new 630 MTG emulator core: an MC68000 via the `m68k` crate, two
+SCN2681s, the mouse, 1024x1024 video and battery RAM. It runs the real
+firmware from bitsavers (`scripts/fetch-630.sh`). Use the **630 MTG** toolbar
+button. It self-tests, draws the desktop, runs menus and windows, and shows
+the 3B2's `login:` prompt in its H1 window. **Keyboard input to the host does
+not work yet.** See `docs/630-mtg-notes.md` for the reverse-engineered
+hardware and where the keyboard path stops.
+
 ### Gotchas found along the way
 
 - A fresh SVR3 tty uses `#` as erase and `@` as kill. The harness runs

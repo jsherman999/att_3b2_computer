@@ -1,0 +1,19 @@
+[package]
+name = "mtg630"
+version = "0.1.0"
+edition = "2021"
+description = "AT&T / Teletype 630 MTG terminal emulator core (MC68000, 2x SCN2681, 1024x1024 bitmap)"
+license = "MIT"
+
+[lib]
+crate-type = ["rlib"]
+
+[[bin]]
+name = "boot630"
+path = "src/bin/boot630.rs"
+
+[dependencies]
+m68k = "0.15.1"
+
+[profile.release]
+opt-level = 3

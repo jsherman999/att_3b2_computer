@@ -26,4 +26,23 @@ int att_dmd_kb_tx(AttDmd *h);
 void att_dmd_set_nvram(AttDmd *h, const uint8_t *data);
 void att_dmd_get_nvram(AttDmd *h, uint8_t *out);
 
+
+
+/* AT&T 630 MTG (experimental). */
+#define ATT630_WIDTH 1024
+#define ATT630_HEIGHT 1024
+#define ATT630_VIDEO_BYTES (128 * 1024)
+#define ATT630_BRAM_BYTES 8192
+typedef struct Att630 Att630;
+Att630 *att630_create(const uint8_t *r621, const uint8_t *r620, const uint8_t *r623, const uint8_t *r622,
+                      const uint8_t *bram);
+void att630_destroy(Att630 *h);
+void att630_reset(Att630 *h);
+void att630_run(Att630 *h, uint32_t micros);
+void att630_copy_video(Att630 *h, uint8_t *out, size_t len);
+void att630_host_rx(Att630 *h, const uint8_t *data, size_t len);
+size_t att630_host_tx(Att630 *h, uint8_t *out, size_t max);
+void att630_key(Att630 *h, uint8_t code, _Bool down);
+void att630_mouse(Att630 *h, uint16_t x, uint16_t y, uint8_t buttons);
+void att630_get_bram(Att630 *h, uint8_t *out);
 #endif

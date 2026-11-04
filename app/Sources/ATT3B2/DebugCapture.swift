@@ -67,6 +67,10 @@ enum DebugCapture {
                 if f.count == 2 { DMDTerminal.shared.mouseMove(x: f[0], y: f[1]) }
             case "dmdrelease":
                 if let b = UInt8(rest) { DMDTerminal.shared.mouseUp(b) }
+            case "630type":       // keystrokes on the 630 keyboard at typing speed
+                Terminal630.shared.typeText(rest.replacingOccurrences(of: "\\r", with: "\r"))
+            case "630snap":       // 630snap <name>: write 630-<name>.png now
+                write630Screen(to: dir.appendingPathComponent("630-\(rest).png"))
             case "sleep":         // sleep <ms>: the 5620 keeps running on its own thread
                 usleep(useconds_t((Int(rest) ?? 0) * 1000))
             case "snap":          // snap <name>: write dmd-<name>.png now

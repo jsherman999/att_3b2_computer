@@ -1,11 +1,10 @@
 # AT&T 630 MTG: reverse-engineering notes
 
-Status (2026-11-03): `mtg630/` boots the real 630 firmware (bitsavers
+Status (2026-11-04): `mtg630/` boots the real 630 firmware (bitsavers
 `460620-1` to `460623-1`, CRC-identical to MAME's `att630` set). It passes the
 self-test, draws the desktop, runs the button-3 menu and creates windows. The
-power-on **H1** window shows host output, including the 3B2's `login:` prompt
-over a PORTS line in the app. **Not working yet:** typed keys never reach the
-host.
+power-on **H1** window is a working terminal on the 3B2: `scripts/test_630.py`
+logs in as jay by typing on the emulated keyboard and runs commands.
 
 ## Hardware, as the firmware expects it
 
@@ -28,14 +27,26 @@ dispatcher is at 066C.
 
 | Level | Source | How the firmware uses it |
 |---|---|---|
-| 5 | DUART 1 **OP4 (RxRDYA) / OP6 (TxRDYA)**, OPCR = 0x70 | Main EIA receive and transmit |
-| 4 | DUART 2 OP4 / OP6, OPCR = 0x50 | Aux EIA receive and transmit |
+| 5 | DUART 1 **OP4 (RxRDYA)**, OPCR = 0x70 | Main EIA receive (handler EBB2 only drains the receiver) |
+| 4 | DUART 2 OP4, OPCR = 0x50 | Aux EIA receive |
 | 3 | DUART 1 INTR (counter/timer, 60 Hz, ACR = E0) | system tick, counter at 7800AA |
 | 2 | DUART 2 INTR (IP2 change) and DUART 1 **OP5 (RxRDYB)** | mouse strobe *and* keyboard receive |
-| 1 | vertical blank | transmit polling and housekeeping |
+| 1 | vertical blank | **transmit**: EED4/F064 -> ECF8 fill THR while TxRDY, then disable the transmitter |
 
-MAME's skeleton driver wires only the DUART INTR pins. The receive and transmit
-interrupts on OP4-OP6 are why host input appeared to be ignored.
+MAME's skeleton driver wires only the DUART INTR pins. The receive interrupt on
+OP4 is why host input appeared to be ignored. The firmware also programs OP6 as
+TxRDYA, but nothing services it at level 5: wiring it there causes an interrupt
+storm the moment the transmitter is enabled, so transmit is left to the
+vertical-blank poll.
+
+### Modem-control inputs (active low)
+
+The port "ready" check (EB76) reads the DUART input port and ANDs it with a
+mask from the port's info block (7846EC+0x0F). If every masked line is high, the
+line counts as hung up and the write routine (F25C) drops the data. Masks: Main
+EIA = DUART 1 **IP4/IP5** (0x30), Aux EIA = DUART 2 **IP3** (0x08). `mtg630`
+holds these low (carrier present). This was the main reason typed keys never
+reached the host.
 
 ### The mouse strobe is the scheduler's clock
 
@@ -59,47 +70,57 @@ The app saves BRAM to `~/Library/Application Support/ATT3B2/630-bram.bin`.
 
 ## Keyboard protocol (DUART 1 channel B, 4800 baud, 8 bits + even parity)
 
-- The terminal sends **0x84** ("identify") followed by 0x00, and later 0x8C
-  (probably click or LEDs). It repeats this about every 2.1 s while the
-  keyboard counts as absent.
-- The keyboard answers with **ID = type - 1**, sent with a **parity error**:
-  the parity bit acts as a ninth bit marking status bytes. Type 0x11 selects
-  the key table at 1D6BE (98-key keyboard). Type 2 selects 1D4BE.
+- The keyboard sends its **ID = type - 1** once after power-up, with a **parity
+  error**: the parity bit acts as a ninth bit marking status bytes. Type 0x11
+  selects the key table at 1D6BE (98-key keyboard). Type 2 selects 1D4BE.
+- **An ID byte at any other time means "keyboard re-plugged".** In the normal
+  state (6DE4) the decoder returns -1 for it, 5F96 resets keyboard state and
+  drops back to the identify state (6D48), which ignores keys for 63 ticks (about
+  a second). `mtg630` used to answer every 0x84 with the ID, which made the
+  terminal reset itself every second and swallow most keys.
+- The terminal's own bytes are settings, not requests: 0x88 | click volume
+  (BRAM E0000B) from 6A72, 0x84 followed by an LED byte (0x00, 0x01, 0x04, 0x05
+  as Caps Lock and friends change), and so on. The keyboard does not answer them.
 - Key bytes: **bit 7 set = make (pressed)**, clear = break. The table entry is
   `[class, normal, ctrl, shift]`, indexed by `code & 0x7F`. Class 0x01 entries
-  are modifiers (1D/26 shift-like, 1E/2B/64 ctrl/lock-like).
-- 7800F6 is a keyboard watchdog (31 IP2 ticks). If it expires, the keyboard
-  is considered gone, 780110 is cleared, and identification restarts.
+  are modifiers: **0x1E = Shift, 0x1D = Ctrl** (the first version of the app had
+  these swapped), 0x64 and others are locks.
+- 78010E counts keys held down. 7800F6 is a watchdog reloaded (31 ticks) by every
+  keyboard byte; if it runs out while a key is still held, the terminal assumes the
+  keyboard was unplugged mid-keystroke and re-initialises it.
 
-### Where keyboard input stops
+### Path of a key to the host
 
-Traced with `boot630 WATCH=... CALLERS=...`:
+1. The ISR at 6286 reads SRB/RHRB and queues (flags, byte) for the keyboard
+   process. Parity-flagged bytes go to the ID path (6114).
+2. The keyboard process (state machine at 7801BE: 6D48 identify, 6DE4 normal,
+   6F08 recheck) decodes with 5EE0, then 67AE -> 65BC -> 6882.
+3. 6882 delivers to the keyboard owner (7801C6). If that process reads its own
+   keyboard (flag bit 4) the character goes to its queue at +0x11A. The H1
+   windowproc does not, so the character goes to its host connection: the
+   connection's write method (struct+0x1C = 70F8) -> port write F25C -> ready check
+   EB76 -> output queue -> start output EB32 (CR = 0x04, transmitter on).
+4. The vertical-blank handler (ECF8) moves the queue into THRA.
 
-1. The ISR at 6286 reads RHRB and queues the byte. The keyboard process
-   (6588 → state machine at 7801BE: 6D48 init, 6DE4 normal) decodes it.
-2. 67AE → 65BC → 6858 → 6882: the H1 windowproc (78957C) is current and has
-   flag bit 4 set ("reads its own keyboard"), so each character is put into
-   its input queue at +0x11A. This was hit once per key.
-3. **The windowproc never reads that queue and never calls start-output**
-   (EB32, which enables the Main EIA transmitter with CR = 0x04). The queue's
-   head and tail pointers are equal afterwards.
+### Scan codes
 
-Leads for next time:
-
-- The windowproc requested resources with mask 0x0C (4408 → 4430). Check
-  whether its keyboard event bit is ever delivered, or whether it waits on
-  another event.
-- Answer the 0x8C command (status) correctly, so 780110 stays set and the
-  keyboard state machine stops reinitialising.
-- `s`/`S` are not in the plain or letter classes of table 1D6BE. Find the
-  class 0x0A/0x88/0x89 handlers in the class table at 1D98E.
+`mtg630/src/keymap.rs` maps ASCII to scan codes, checked by `kbmap630`, which
+presses every code alone, with Shift and with Ctrl and records the host output.
+Highlights: `s` = 0x56, Return = 0x5A (0x5E, 0x6A, 0x72 and 0x7F also send CR),
+arrows Up 0x55 / Down 0x6C / Right 0x0E / Left 0x3A (ANSI `ESC [ A`-`D`), Tab
+0x39, Backspace 0x2E, Esc 0x53, Delete 0x2D. Many keys send `ESC N x` sequences
+(the 630's function keys).
 
 ## Tools
 
 - `mtg630/src/bin/boot630.rs`: headless boot with a timed event script
-  (`move/down/up/key/scan/host/snap/dump/ip1/ip2`). Environment variables:
-  `BRAMFILL`, `WATCH`, `CALLERS`, `VEC`, `TRACESR`.
+  (`move/down/up/key/scan/host/snap/dump/ip1/ip2/pcs`). `pcs PROC` ... `pcs off`
+  prints the code ranges a process ran (current process pointer: 78020E).
+  Environment variables: `BRAMFILL`, `WATCH`, `CALLERS`, `VEC`, `TRACESR`,
+  `WWATCH` (log writes to addresses, with the writing PC).
 - `mtg630/src/bin/kbmap630.rs`: presses every scan code and records the
-  host-port output.
+  host-port output (`GAPMS`, `TIMELINE=1`).
+- `mtg630/src/bin/link630.rs`: the 630 on a TCP host (the 3B2's PORTS line),
+  driven by an expect/type script. Used by `scripts/test_630.py`.
 - Disassemble with capstone: `machine/630/rom630.bin` (the interleaved image)
   produces `rom630.dis`.

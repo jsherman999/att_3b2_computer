@@ -24,6 +24,19 @@ fn snap(t: &Mtg630, path: &str) {
     println!("  screen -> {path}");
 }
 
+/// Print executed PCs as contiguous runs (gap <= 16 bytes) with hit counts.
+fn print_runs(pcs: &std::collections::BTreeMap<u32, u64>) {
+    let mut runs: Vec<(u32, u32, u64)> = vec![];
+    for (&pc, &n) in pcs {
+        match runs.last_mut() {
+            Some(r) if pc <= r.1 + 16 => { r.1 = pc; r.2 += n; }
+            _ => runs.push((pc, pc, n)),
+        }
+    }
+    println!("  process PCs: {} runs", runs.len());
+    for (a, b, n) in runs { println!("    {a:06x}-{b:06x} x{n}"); }
+}
+
 fn main() {
     let args: Vec<String> = env::args().collect();
     let dir = &args[1];
@@ -54,6 +67,9 @@ fn main() {
     t.bus.callers_of = env::var("CALLERS").ok().map(|v| u32::from_str_radix(&v, 16).unwrap());
     if let Ok(w) = env::var("WATCH") {
         for a in w.split(',') { t.bus.watch.insert(u32::from_str_radix(a, 16).unwrap(), 0); }
+    }
+    if let Ok(w) = env::var("WWATCH") {
+        for a in w.split(',') { t.bus.write_watch.push(u32::from_str_radix(a, 16).unwrap()); }
     }
     let slice = CPU_HZ / 100;
     let mut now = 0.0;
@@ -100,12 +116,26 @@ fn main() {
                     let d = if e[0] == "ip1" { &mut t.bus.duart1 } else { &mut t.bus.duart2 };
                     for n in 0..6 { d.set_input(n, v & (1 << n) != 0); }
                 }
+                "pcs" => {
+                    // pcs PROC: start recording PCs run by that process; pcs off: print runs
+                    if arg == "off" {
+                        print_runs(&t.bus.proc_pcs);
+                        t.bus.proc_watch = None;
+                        t.bus.proc_pcs.clear();
+                    } else {
+                        t.bus.proc_watch = Some(u32::from_str_radix(&arg, 16).unwrap());
+                        t.bus.proc_pcs.clear();
+                    }
+                }
                 other => println!("unknown event {other}"),
             }
             ev += 1;
         }
         t.run(slice);
         now += 0.01;
+        for (pc, a, v) in t.bus.write_log.drain(..) {
+            println!("{now:6.2}s write {a:06x} = {v:02x} by pc {pc:06x}");
+        }
         for (name, d) in [("duart1", &mut t.bus.duart1), ("duart2", &mut t.bus.duart2)] {
             for ch in 0..2 {
                 let tx = d.take_transmitted(ch);

@@ -129,15 +129,30 @@ runs commands, and confirms on the console that they ran (PASS).
 `scripts/check-patches.sh` runs from `build-app.sh` and fails the build if a
 vendored change is missing from `patches/`.
 
-## Phase 4 status (2026-11-03): 630 MTG, experimental
+## Phase 4 status (2026-11-04): 630 MTG works as a terminal
 
 `mtg630/` is a new 630 MTG emulator core: an MC68000 via the `m68k` crate, two
-SCN2681s, the mouse, 1024x1024 video and battery RAM. It runs the real
-firmware from bitsavers (`scripts/fetch-630.sh`). Use the **630 MTG** toolbar
-button. It self-tests, draws the desktop, runs menus and windows, and shows
-the 3B2's `login:` prompt in its H1 window. **Keyboard input to the host does
-not work yet.** See `docs/630-mtg-notes.md` for the reverse-engineered
-hardware and where the keyboard path stops.
+SCN2681s, the mouse, the keyboard, 1024x1024 video and battery RAM. It runs the
+real firmware from bitsavers (`scripts/fetch-630.sh`). Use the **630 MTG**
+toolbar button. It self-tests, draws the desktop, runs menus and windows, and
+its H1 window is a working terminal on the 3B2: log in, run commands, use the
+arrow keys. Not done yet: the 630's own windowing protocol to the host
+(`layers`/xt for the 630 and its downloaded programs) and 630 setup from the
+keyboard (Setup key).
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| no host output | receive interrupts are on DUART OP4, not INTR | wired OP4 to levels 5/4 |
+| windows never drawn | process timers count IP2 strobes | IP2 pulses every frame |
+| typed keys dropped silently | the port "ready" check reads the modem lines (DUART 1 IP4/IP5), and all inputs read high = no carrier | hold IP4/IP5 (and DUART 2 IP3) low |
+| transmitter enabled, then an interrupt storm | TxRDY (OP6) was wired to level 5, but transmit is polled at vertical blank | OP6 not wired |
+| most keys lost, terminal resets every second | the keyboard answered every 0x84 with its ID; an ID after power-up means "keyboard re-plugged" | ID once after reset |
+| Shift gave control characters, no `s`, Return sent Up-arrow | keymap guessed from the ROM table | every scan code checked with `kbmap630`: Shift 0x1E, Ctrl 0x1D, `s` 0x56, Return 0x5A |
+
+Tests: `scripts/test_630.py` boots the 3B2 headless on a throwaway clone and
+logs in through the 630 core (`mtg630` `link630`) (PASS). `scripts/test_630_app.py`
+does the same in the app's 630 window and confirms on the console that the typed
+command ran (PASS). Details: `docs/630-mtg-notes.md`.
 
 ### Gotchas found along the way
 

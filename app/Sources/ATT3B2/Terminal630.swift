@@ -79,10 +79,11 @@ final class Terminal630: @unchecked Sendable {
         att630_mouse(handle, mouseX, mouseY, buttons)
     }
 
-    static let shiftCode: UInt8 = 0x1d
-    static let ctrlCode: UInt8 = 0x1e
+    static let shiftCode: UInt8 = 0x1e
+    static let ctrlCode: UInt8 = 0x1d
     /// Printable characters -> (scan code, needs Shift), from the firmware's table for
-    /// keyboard type 0x11 (the 630's 98-key keyboard).
+    /// keyboard type 0x11 (the 630's 98-key keyboard), checked by pressing every code
+    /// on the emulated terminal and reading what it sends (mtg630 `kbmap630`).
     static let keymap: [Character: (UInt8, Bool)] = [
         " ": (0x3e, false),
         "!": (0x0a, true),
@@ -135,6 +136,7 @@ final class Terminal630: @unchecked Sendable {
         "P": (0x19, true),
         "Q": (0x44, true),
         "R": (0x09, true),
+        "S": (0x56, true),
         "T": (0x69, true),
         "U": (0x3f, true),
         "V": (0x63, true),
@@ -166,6 +168,7 @@ final class Terminal630: @unchecked Sendable {
         "p": (0x19, false),
         "q": (0x44, false),
         "r": (0x09, false),
+        "s": (0x56, false),
         "t": (0x69, false),
         "u": (0x3f, false),
         "v": (0x63, false),
@@ -179,11 +182,15 @@ final class Terminal630: @unchecked Sendable {
         "~": (0x5f, true),
     ]
     static let specialKeys: [UInt16: UInt8] = [
-        36: 0x55, 76: 0x55,   // Return
+        36: 0x5a, 76: 0x5a,   // Return (0x5e, 0x6a, 0x72 and 0x7f also send CR)
         48: 0x39,             // Tab
         51: 0x2e,             // Backspace
         53: 0x53,             // Escape
         117: 0x2d,            // Delete
+        126: 0x55,            // Up    -> ESC [ A
+        125: 0x6c,            // Down  -> ESC [ B
+        124: 0x0e,            // Right -> ESC [ C
+        123: 0x3a,            // Left  -> ESC [ D
     ]
 
     func type(_ event: NSEvent) {
@@ -203,6 +210,37 @@ final class Terminal630: @unchecked Sendable {
         att630_key(handle, code, false)
         if shift { att630_key(handle, Self.shiftCode, false) }
         if ctrl { att630_key(handle, Self.ctrlCode, false) }
+    }
+
+    /// Type a string on the 630 keyboard at typing speed (for scripted tests; blocks).
+    /// Control characters become Ctrl + letter; CR is the Return key.
+    func typeText(_ text: String) {
+        guard let handle else { return }
+        for ch in text {
+            var code: UInt8?, shift = false, ctrl = false
+            switch ch {
+            case "\r", "\n": code = 0x5a
+            case "\t": code = 0x39
+            case "\u{08}": code = 0x2e
+            case "\u{1b}": code = 0x53
+            case "\u{7f}": code = 0x2d
+            default:
+                if let a = ch.asciiValue, (1...26).contains(a) {
+                    code = Self.keymap[Character(UnicodeScalar(a + 0x60))]?.0; ctrl = true
+                } else if let m = Self.keymap[ch] {
+                    (code, shift) = m
+                }
+            }
+            guard let code else { continue }
+            if ctrl { att630_key(handle, Self.ctrlCode, true) }
+            if shift { att630_key(handle, Self.shiftCode, true) }
+            att630_key(handle, code, true)
+            usleep(15_000)
+            att630_key(handle, code, false)
+            if shift { att630_key(handle, Self.shiftCode, false) }
+            if ctrl { att630_key(handle, Self.ctrlCode, false) }
+            usleep(60_000)
+        }
     }
 
     func copyScreen(into buffer: UnsafeMutablePointer<UInt8>) {

@@ -12,4 +12,5 @@ done
 for p in "$ROOT"/patches/*.patch; do
   git -C "$ROOT/vendor/simh" apply --check "$p" 2>/dev/null && git -C "$ROOT/vendor/simh" apply "$p"
 done
+rm -f "$ROOT/vendor/simh/BIN/3b2-700"   # SIMH's makefile does not track source changes
 make -C "$ROOT/vendor/simh" 3b2-700

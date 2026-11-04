@@ -1,0 +1,18 @@
+diff --git a/3B2/3b2_ni.c b/3B2/3b2_ni.c
+index 219e0a5..a410a00 100644
+--- a/3B2/3b2_ni.c
++++ b/3B2/3b2_ni.c
+@@ -729,6 +729,13 @@ t_stat ni_reset(DEVICE *dptr)
+ 
+     ni.poll_rate = NI_QPOLL_FAST;
+ 
++    /* att3b2: a system reset restarts the card's ROM, so forget any code that was
++     * downloaded into it. Otherwise a reboot that happens after the boot diagnostics
++     * pumped the card (whose CRC is also a UNIX pump CRC) but before UNIX re-sysgened
++     * it answers the firmware's EDT sysgen with a full completion instead of an
++     * express one, and the firmware reports SYSGEN FAILED FOR NI. */
++    ni.crc = 0;
++
+     /* Make sure the transceiver is disabled and all
+      * polling activity and interrupts are disabled. */
+     ni_disable();

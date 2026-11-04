@@ -71,6 +71,30 @@ Rebuilding the image from the pristine `sd630.img`:
 The install floppies are mirrored into `machine/software/` from
 archives.loomcom.com/3b2/software.
 
+## Phase 2 status (2026-11-03): done
+
+`scripts/build-app.sh [--install]` builds `build/ATT3B2.app` (SwiftUI and
+[SwiftTerm](https://github.com/migueldeicaza/SwiftTerm)). The bundle contains the
+patched simulator, the ROM, NVRAM and TOD files, and the golden disk as an APFS
+clone. On first launch the app clones these into
+`~/Library/Application Support/ATT3B2/700`.
+
+- The console is a CRT-styled VT100 on the simulator's pty. You can pick
+  green, amber or white phosphor, the font size and scanlines in Settings.
+- **Power switch** (⇧⌘P): UNIX syncs and powers off, like the real front-panel
+  switch (`SET CSR POWERDOWN`, patch 0003). **Reset** (⇧⌘R). **Pull the Plug**
+  kills the simulator. Quitting while the machine runs asks first.
+- **Snapshots**: APFS clones of the hard disk, taken or restored while the
+  machine is off, plus a factory restore.
+- Test harness: `-autoPowerOn YES -debugCapture <dir>` makes the app write
+  `console.txt` and `state.txt` and run commands from `cmd.txt`.
+  `scripts/test_app.py` uses it to boot, log in, run a command, press the
+  power switch and take a snapshot.
+- The guest clock follows the Mac (`scripts/set_clock.py`). The TZ comes from
+  the Mac, and `date` needs a four-digit year under the Y2K patch.
+- The first-boot `setup` banner and the slow `firstcheck` fsck are retired.
+  Boot to login takes about 80 s.
+
 ### Gotchas found along the way
 
 - A fresh SVR3 tty uses `#` as erase and `@` as kill. The harness runs
@@ -82,3 +106,8 @@ archives.loomcom.com/3b2/software.
 - `patches/0001`: SLIRP port forwards bind to loopback, not every interface.
   `patches/0002`: the SLIRP doorbell socket no longer loops forever on a
   refused port.
+- `patches/0004`: a reboot that came after the boot diagnostics but before
+  UNIX started the NI (fsck's automatic reboot after a power loss) hung the
+  firmware with `SYSGEN FAILED FOR NI`. The stale pump CRC is now cleared on
+  system reset. `patches/0005`: the NAT banner honours `-q`.
+- The 1990 Bourne shell has no `$((...))`; use `expr`.

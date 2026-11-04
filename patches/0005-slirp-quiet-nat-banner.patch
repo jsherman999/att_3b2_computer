@@ -1,0 +1,12 @@
+--- a/slirp_glue/sim_slirp.c	2026-11-03 18:54:08
++++ b/slirp_glue/sim_slirp.c	2026-11-03 18:54:08
+@@ -358,7 +358,8 @@
+     slirp->dbit = dbit;
+     slirp->dptr = dptr;
+     
+-    sim_slirp_show(slirp, stdout);
++    if (!sim_quiet)                         /* att3b2: honour -q; keep the console clean */
++        sim_slirp_show(slirp, stdout);
+     if (sim_log && (sim_log != stdout))
+         sim_slirp_show(slirp, sim_log);
+     if (sim_deb && (sim_deb != stdout) && (sim_deb != sim_log))

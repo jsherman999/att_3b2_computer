@@ -51,6 +51,9 @@ def main(root_pw="att3b2", user_pw="att3b2"):
     # Accounts
     print(s.sh(f"grep '^{USER}:' /etc/passwd || /usr/bin/useradd -m -d /usr/{USER} -s /bin/ksh {USER} 2>&1 || "
                f"(mkdir /usr/{USER}; echo '{USER}::201:1::/usr/{USER}:/bin/ksh' >> /etc/passwd; chown {USER} /usr/{USER}); [ -f /etc/shadow ] && /usr/bin/pwconv; echo done"))
+    # What AT&T's first-time `setup` leaves behind: no "Welcome! ... setup" banner and no
+    # first-boot check (a 20 s sleep plus a full fsck on every boot).
+    s.sh("rm -f /etc/rc.d/setup /etc/rc2.d/S00firstcheck")
     set_password(s, "root", root_pw)
     set_password(s, USER, user_pw)
     print(s.sh("tail -3 /etc/passwd; cat /etc/hosts | grep -v '^#'"))

@@ -22,6 +22,27 @@ enum DebugCapture {
                 }
                 try? "\(Machine.shared.state.rawValue)\n".write(to: url.appendingPathComponent("state.txt"),
                                                                  atomically: true, encoding: .utf8)
+                runCommands(in: url)
+            }
+        }
+    }
+
+    /// Test commands: each line of cmd.txt is run once, then the file is removed.
+    /// power | reset | plug | snapshot <label> | type <text>   (\r in text = Return)
+    private static func runCommands(in dir: URL) {
+        let file = dir.appendingPathComponent("cmd.txt")
+        guard let text = try? String(contentsOf: file, encoding: .utf8) else { return }
+        try? FileManager.default.removeItem(at: file)
+        let m = Machine.shared
+        for line in text.split(separator: "\n").map(String.init) {
+            let (verb, rest) = line.firstIndex(of: " ").map { (String(line[..<$0]), String(line[line.index(after: $0)...])) } ?? (line, "")
+            switch verb {
+            case "power": m.pressPowerSwitch()
+            case "reset": m.reset()
+            case "plug": m.forceOff()
+            case "snapshot": m.takeSnapshot(named: rest)
+            case "type": m.console?.sendBytes(Array(rest.replacingOccurrences(of: "\\r", with: "\r").utf8))
+            default: break
             }
         }
     }

@@ -95,6 +95,40 @@ clone. On first launch the app clones these into
 - The first-boot `setup` banner and the slow `firstcheck` fsck are retired.
   Boot to login takes about 80 s.
 
+## Phase 3 status (2026-11-03): done, the DMD 5620 terminal
+
+Open it with the **DMD 5620** toolbar button. It is Seth Morabito's
+[dmd_core](https://github.com/dmdmtg/dmd_core) (WE32100, firmware 8;7;5)
+behind `dmd_ffi/`, a small C-ABI crate. The 5620 connects over raw TCP to
+`127.0.0.1:9001`, which SIMH gives to the first free PORTS line (`tty21`).
+
+Using it: log in as `jay`, run `layers`, then hold the **right** mouse button
+on the grey desktop for the menu (New, Reshape, Move, Top, Bottom, Current,
+Delete, Exit). Choose **New** and sweep a rectangle with the right button.
+⌥-click is button 2. F9 is the 5620's Setup key. The 5620 tracks the mouse
+relatively, like the real quadrature mouse, and the Mac pointer is hidden
+over its screen.
+
+On the 3B2: `getty` runs on the PORTS lines, logins there get `TERM=dmd`,
+and layers windows run `/bin/sh` (ksh exits after its first command inside an
+xt channel). The DMD 2.0 development tools (`dmdcc`, `32ld`, `jx`, demos)
+live in `/usr/dmd`. `scripts/configure_dmd.py` sets all this up.
+
+Problems found and fixed on the way to working layers:
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| `layers`: terminal is not a 5620 | PORTS delivered 1 char per clock tick, so the ID reply was too slow | `patches/0006`: receive up to 64 chars per poll |
+| no `lsys.8;7;5` | firmware 2.0 carries layers in ROM, so there is nothing to download | empty `/usr/lib/layersys/lsys.8;7;5` |
+| kernel panic (MMU fault) at `layers` | the 1985 DMD package's `drvinstall` replaced the SVR3 `xt` driver | SVR3 driver and major-35 nodes restored |
+| window hangs on Return | PORTS card did CR→NL inside xt's binary packets | `patches/0007`: translation only for line discipline 0 |
+| output stalls under load | 5620 DUART overwrote unread bytes; PORTS could fill the completion queue and lose a transmit-done | `patches/dmd_core-0001`, `patches/0008` |
+
+Tests: `scripts/test_dmd.py` logs in on the 5620, runs layers, opens a window,
+runs commands, and confirms on the console that they ran (PASS).
+`scripts/check-patches.sh` runs from `build-app.sh` and fails the build if a
+vendored change is missing from `patches/`.
+
 ### Gotchas found along the way
 
 - A fresh SVR3 tty uses `#` as erase and `@` as kill. The harness runs
@@ -110,4 +144,6 @@ clone. On first launch the app clones these into
   UNIX started the NI (fsck's automatic reboot after a power loss) hung the
   firmware with `SYSGEN FAILED FOR NI`. The stale pump CRC is now cleared on
   system reset. `patches/0005`: the NAT banner honours `-q`.
-- The 1990 Bourne shell has no `$((...))`; use `expr`.
+- The 1990 Bourne shell has no `$((...))`; use `expr`. `grep` has no `\\|`; use `egrep`.
+- SVR3 canonical tty input lines max out at 256 characters. Keep scripted
+  commands short.

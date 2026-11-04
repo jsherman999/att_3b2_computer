@@ -33,6 +33,21 @@ final class DMDTerminal: @unchecked Sendable {
     private let host = "127.0.0.1"
     private let port: UInt16 = 9001
 
+    /// `-dmdWireLog <file>`: log every byte crossing the serial line (testing aid).
+    private let wireLog: FileHandle? = {
+        guard let path = UserDefaults.standard.string(forKey: "dmdWireLog") else { return nil }
+        FileManager.default.createFile(atPath: path, contents: nil)
+        return FileHandle(forWritingAtPath: path)
+    }()
+    private let wireStart = Date()
+
+    private func logWire(_ dir: String, _ bytes: ArraySlice<UInt8>) {
+        guard let wireLog, !bytes.isEmpty else { return }
+        let t = String(format: "%9.3f", Date().timeIntervalSince(wireStart))
+        let hex = bytes.map { String(format: "%02x", $0) }.joined(separator: " ")
+        wireLog.write("\(t) \(dir) \(hex)\n".data(using: .utf8)!)
+    }
+
     private init() {
         guard let h = att_dmd_create() else { fatalError("dmd_core failed to initialise") }
         handle = h
@@ -98,11 +113,13 @@ final class DMDTerminal: @unchecked Sendable {
             if fd >= 0 {
                 let n = read(fd, &rx, rx.count)
                 if n > 0 {
+                    logWire("3b2->dmd", rx[0..<n])
                     for i in 0..<n { att_dmd_rx_char(handle, rx[i]) }
                 } else if n == 0 || (n < 0 && errno != EAGAIN && errno != EWOULDBLOCK) {
                     disconnect()
                 }
                 let m = tx.withUnsafeMutableBufferPointer { att_dmd_rs232_tx(handle, $0.baseAddress, $0.count) }
+                if m > 0 { logWire("dmd->3b2", tx[0..<m]) }
                 if m > 0, fd >= 0 {
                     var off = 0
                     while off < m {

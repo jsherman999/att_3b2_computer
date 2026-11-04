@@ -1,0 +1,42 @@
+diff --git a/3B2/3b2_ports.c b/3B2/3b2_ports.c
+index c224012..7b2af71 100644
+--- a/3B2/3b2_ports.c
++++ b/3B2/3b2_ports.c
+@@ -734,6 +734,20 @@ t_stat ports_cio_svc(UNIT *uptr)
+     return SCPE_OK;
+ }
+ 
++/* att3b2: free entries in a card's completion queue (one slot always stays empty,
++ * which is how a full ring is told apart from an empty one). */
++static uint32 ports_cqueue_free(uint8 slot)
++{
++    uint32 size = cio[slot].cqs * PPQESIZE;
++    uint32 lp = pread_h(cio[slot].cqp + PPQESIZE, BUS_PER);
++    uint32 ulp = pread_h(cio[slot].cqp + PPQESIZE + 2, BUS_PER);
++
++    if (size == 0) {
++        return 0;
++    }
++    return ((ulp + size - lp - PPQESIZE) % size) / PPQESIZE;
++}
++
+ t_stat ports_rcv_svc(UNIT *uptr)
+ {
+     uint8 slot;
+@@ -764,11 +778,14 @@ t_stat ports_rcv_svc(UNIT *uptr)
+             /* att3b2: drain up to PORTS_RCV_BURST characters per poll instead of one.
+              * One per clock tick (100/s) made a terminal's 11-byte ID reply take over
+              * 100 ms, longer than layers waits. Only take a character from the line
+-             * when the host has a receive buffer posted, so none are dropped. */
++             * when the host has a receive buffer posted and the completion queue has
++             * room for the result plus one spare slot, so that a transmit completion
++             * is never squeezed out (losing it stalls the line for good). */
+             int n;
+             for (n = 0; n < PORTS_RCV_BURST; n++) {
+                 if (cio[slot].ivec == 0 ||
+-                    !cio_rqueue_avail(slot, PORTS_RCV_QUEUE, PPQESIZE)) {
++                    !cio_rqueue_avail(slot, PORTS_RCV_QUEUE, PPQESIZE) ||
++                    ports_cqueue_free(slot) < 2) {
+                     break;
+                 }
+ 

@@ -21,7 +21,11 @@ DMD=/usr/dmd; export DMD
 PATH=$PATH:$DMD/bin; export PATH
 # The 5620 terminal is on the PORTS lines (tty21-24, tty31-34).
 case "`tty`" in
-/dev/tty[2-9][1-4]) TERM=dmd; export TERM ;;
+/dev/tty[2-9][1-4])
+    TERM=dmd; export TERM
+    # New layers run $SHELL. ksh exits after its first command inside an xt
+    # channel, so layers windows get the Bourne shell.
+    SHELL=/bin/sh; export SHELL ;;
 esac
 """
 

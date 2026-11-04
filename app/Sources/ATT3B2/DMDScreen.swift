@@ -11,6 +11,7 @@ final class DMDScreenView: NSView {
     private var darkOnLight = false
     private var timer: Timer?
     private let blankCursor = NSCursor(image: NSImage(size: NSSize(width: 1, height: 1)), hotSpot: .zero)
+    private let scaler = PixelScaler()
 
     init(terminal: DMDTerminal) {
         self.terminal = terminal
@@ -49,7 +50,8 @@ final class DMDScreenView: NSView {
     private var screenRect: NSRect {
         let scale = min(bounds.width / 800, bounds.height / 1024)
         let w = 800 * scale, h = 1024 * scale
-        return NSRect(x: (bounds.width - w) / 2, y: (bounds.height - h) / 2, width: w, height: h)
+        return backingAlignedRect(NSRect(x: (bounds.width - w) / 2, y: (bounds.height - h) / 2, width: w, height: h),
+                                  options: .alignAllEdgesNearest)
     }
 
     override func draw(_ dirtyRect: NSRect) {
@@ -72,15 +74,9 @@ final class DMDScreenView: NSView {
                                   bytesPerRow: 100, space: space, bitmapInfo: [], provider: provider,
                                   decode: nil, shouldInterpolate: false, intent: .defaultIntent)
         else { return }
-        ctx.interpolationQuality = .none
-        ctx.draw(image, in: screenRect)
-
-        // Gentle scanlines for the CRT look.
-        ctx.setFillColor(NSColor.black.withAlphaComponent(0.18).cgColor)
-        let r = screenRect
-        let pitch = max(2, r.height / 1024 * 2)
-        var y = r.minY
-        while y < r.maxY { ctx.fill(CGRect(x: r.minX, y: y, width: r.width, height: 1)); y += pitch }
+        let scale = window?.backingScaleFactor ?? 2
+        scaler.draw(image, in: screenRect, ctx: ctx, backingScale: scale)
+        PixelScaler.scanlines(rows: 1024, in: screenRect, ctx: ctx, backingScale: scale)
     }
 
     // MARK: Mouse (5620 coordinates: x 0..799, y 0..1023 from the bottom)

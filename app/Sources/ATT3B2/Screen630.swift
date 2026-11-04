@@ -9,6 +9,7 @@ final class Screen630View: NSView {
     private var vram = [UInt8](repeating: 0, count: Int(ATT630_VIDEO_BYTES))
     private var timer: Timer?
     private let blankCursor = NSCursor(image: NSImage(size: NSSize(width: 1, height: 1)), hotSpot: .zero)
+    private let scaler = PixelScaler()
 
     init(terminal: Terminal630) {
         self.terminal = terminal
@@ -37,7 +38,8 @@ final class Screen630View: NSView {
 
     private var screenRect: NSRect {
         let side = min(bounds.width, bounds.height)
-        return NSRect(x: (bounds.width - side) / 2, y: (bounds.height - side) / 2, width: side, height: side)
+        return backingAlignedRect(NSRect(x: (bounds.width - side) / 2, y: (bounds.height - side) / 2, width: side, height: side),
+                                  options: .alignAllEdgesNearest)
     }
 
     override func draw(_ dirtyRect: NSRect) {
@@ -56,8 +58,7 @@ final class Screen630View: NSView {
                                   space: space, bitmapInfo: [], provider: provider, decode: nil,
                                   shouldInterpolate: false, intent: .defaultIntent)
         else { return }
-        ctx.interpolationQuality = .none
-        ctx.draw(image, in: screenRect)
+        scaler.draw(image, in: screenRect, ctx: ctx, backingScale: window?.backingScaleFactor ?? 2)
     }
 
     // Mouse: deltas in 630 pixels.

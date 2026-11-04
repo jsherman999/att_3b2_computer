@@ -1,5 +1,6 @@
 """Drive the SIMH 3B2/700 console with pexpect: boot, log in, run commands, swap floppies."""
 import os
+import re
 import sys
 import time
 
@@ -44,11 +45,22 @@ class Sim:
         self.expect("\n" + PROMPT)
 
     def sh(self, cmd, timeout=600):
-        """Run a command at the root prompt and return its output."""
+        """Run a command at the root prompt and return its output.
+
+        A numbered end marker on its own line delimits the output, so stray prompts
+        (here-documents, typed-ahead echo) can't make results drift between calls.
+        """
+        self._seq = getattr(self, "_seq", 0) + 1
+        mark = f"END{self._seq}OF{os.getpid()}"
         self.send(cmd + "\r")
-        self.expect(PROMPT, timeout=timeout)
+        self.send(f"echo {mark}\r")
+        # Match the marker as printed output, not its echoed "echo MARK" command. Because the
+        # echo line is typed ahead, its output can follow a prompt on the same line.
+        self.expect(r"(\n|" + re.escape(PROMPT) + ")" + mark + r"\r?\n", timeout=timeout)
         out = self.p.before.replace("\r", "")
-        return out.split("\n", 1)[1] if "\n" in out else ""
+        self.expect(PROMPT, timeout=60)
+        lines = out.split("\n")[1:]  # drop the echo of the command's first line
+        return "\n".join(l for l in lines if f"echo {mark}" not in l and not l.startswith("> "))
 
     # -- simulator control (Ctrl-E drops to sim>) ---------------------------
     def scp(self, cmd, resync=True):

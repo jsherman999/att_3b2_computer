@@ -39,8 +39,46 @@ with a bitmapped AT&T graphical terminal as its monitor.
 
 ## Quick start
 
-    scripts/fetch-assets.sh                 # ROMs, disk image, build simulator
+    scripts/fetch-assets.sh                 # ROMs, disk image, patches, build simulator
     cd machine/700 && ../../vendor/simh/BIN/3b2-700 ../../config/smoke-test.ini
 
-`smoke-test.ini` boots to `Console Login:`, logs in as root, runs `uname`/`df`
-and exits. Status: **boots clean to SVR3.2.3 on Apple Silicon (2026-11-03).**
+## Phase 1 status (2026-11-03): done, 16/16 checks in `scripts/verify_system.py`
+
+`machine/700/golden.img` (not committed, rebuildable) is SVR3.2.3 on the
+3B2/700 with:
+
+| Area | Installed |
+|---|---|
+| Base | System V 3.2.3, FMLI/FACE, LP, UUCP, spell, Terminal Filters |
+| Shells | sh, Korn shell (`/bin/ksh`) |
+| Development | C (`cc`, `make`, `lex`, `yacc`, `lint`), SCCS, Fortran 77, Pascal (`pc`), BASIC |
+| Text processing | Documenter's Workbench (troff, tbl, eqn, pic, grap, mm), Writer's Workbench (style, diction) |
+| Networking | NI Ethernet driver, Wollongong WIN/3B TCP/IP 3.2, NFS 3.2.4, C-Kermit 5A(189) |
+| DMD | DMD Core/Application/Text utilities: `layers`, for the 5620 terminal |
+
+Networking uses SIMH's SLIRP NAT: the guest is `att3b2` at 10.0.2.15 (gateway
+10.0.2.2, DNS 10.0.2.3). Host forwards, bound to 127.0.0.1 only:
+`telnet 127.0.0.1 2323`, ftp `127.0.0.1 2121`. PORTS serial lines are on
+`127.0.0.1:9001`. Accounts: `root` and `jay`, both with password `att3b2`.
+
+Rebuilding the image from the pristine `sd630.img`:
+
+    .venv/bin/python scripts/install_packages.py ksh ni tcpip
+    .venv/bin/python scripts/configure_system.py
+    .venv/bin/python scripts/install_packages.py kermit fortran pascal basic termfilt dwb wwb nfs
+    .venv/bin/python scripts/verify_system.py
+
+The install floppies are mirrored into `machine/software/` from
+archives.loomcom.com/3b2/software.
+
+### Gotchas found along the way
+
+- A fresh SVR3 tty uses `#` as erase and `@` as kill. The harness runs
+  `stty erase '^H' kill '^U'` before typing anything else.
+- The console is a slow serial line. Prompts are judged only after the output
+  goes quiet, otherwise a half-printed `[y, n]` gets the wrong answer.
+- Floppy-to-disk copies hung intermittently with `set cpu idle`. Installs run
+  with `noidle`.
+- `patches/0001`: SLIRP port forwards bind to loopback, not every interface.
+  `patches/0002`: the SLIRP doorbell socket no longer loops forever on a
+  refused port.

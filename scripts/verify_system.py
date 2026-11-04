@@ -14,7 +14,7 @@ CHECKS = [
     ("make+sccs", "type make admin get delta lex yacc lint", "admin is"),
     ("f77", "cd /tmp; cat > t.f <<'X'\n      PRINT *, 'F77-OK', 6*7\n      END\nX\nf77 -o tf t.f 2>&1 && ./tf", "F77-OK"),
     ("pascal", "cd /tmp; cat > t.p <<'X'\nprogram t(output);\nbegin writeln('PAS-OK') end.\nX\n"
-               "(pc -o tp t.p 2>&1 && ./tp) || (pascal t.p 2>&1); ls /usr/bin | grep -i -E '^(pc|pascal)$'", "PAS-OK"),
+               "(pc -o tp t.p 2>&1 && ./tp) || (pascal t.p 2>&1); ls -l /usr/bin/pc", "PAS-OK"),
     ("basic", "ls /usr/bin | grep -i basic", "basic"),
     ("nroff", "cat > /tmp/t.mm <<'X'\n.ce\nNROFF OK\nX\nnroff /tmp/t.mm | grep -v '^$'", "NROFF OK"),
     ("troff+dwb", "type troff tbl eqn pic grap mm", "troff is"),

@@ -1,0 +1,53 @@
+diff --git a/src/duart.rs b/src/duart.rs
+index 3d76d6b..d17c05e 100644
+--- a/src/duart.rs
++++ b/src/duart.rs
+@@ -94,6 +94,8 @@ struct Port {
+     rx_queue: VecDeque<u8>,
+     tx_queue: VecDeque<u8>,
+     char_delay: Duration,
++    // att3b2: a delivered byte the CPU has not read yet; hold the next one back.
++    rx_unread: bool,
+     next_rx: Instant,
+     next_tx: Instant,
+ }
+@@ -110,6 +112,7 @@ impl Port {
+             rx_queue: VecDeque::new(),
+             tx_queue: VecDeque::new(),
+             char_delay: Duration::new(0, 1_000_000),
++            rx_unread: false,
+             next_rx: Instant::now(),
+             next_tx: Instant::now(),
+         }
+@@ -193,10 +196,14 @@ impl Duart {
+             _ => (ISTS_RBI, KEYBOARD_INT),
+         };
+ 
+-        if !ctx.rx_queue.is_empty() && Instant::now() >= ctx.next_rx {
++        // att3b2: lossless receive. The 2681 has a small FIFO and the real 5620 kept
++        // up with 9600 baud; in emulation a busy CPU (scrolling a layer) could miss a
++        // byte that was then overwritten, corrupting layers' xt packets for good.
++        if !ctx.rx_queue.is_empty() && !ctx.rx_unread && Instant::now() >= ctx.next_rx {
+             if let Some(c) = ctx.rx_queue.pop_back() {
+                 if ctx.conf & CNF_ERX != 0 {
+                     ctx.rx_data = c;
++                    ctx.rx_unread = true;
+                     ctx.stat |= STS_RXR;
+                     self.istat |= istat;
+                     self.ivec |= ivec;
+@@ -437,6 +444,7 @@ impl Device for Duart {
+             THRA => {
+                 let mut ctx = &mut self.ports[PORT_0];
+                 ctx.stat &= !STS_RXR;
++                ctx.rx_unread = false;
+                 self.istat &= !ISTS_RAI;
+                 self.ivec &= !RX_INT;
+                 Ok(ctx.rx_data)
+@@ -459,6 +467,7 @@ impl Device for Duart {
+             THRB => {
+                 let mut ctx = &mut self.ports[PORT_1];
+                 ctx.stat &= !STS_RXR;
++                ctx.rx_unread = false;
+                 self.istat &= !ISTS_RBI;
+                 self.ivec &= !KEYBOARD_INT;
+                 Ok(ctx.rx_data)

@@ -16,3 +16,8 @@ dmd_core = { git = "https://github.com/dmdmtg/dmd_core", rev = "d08a593" }
 opt-level = 3
 lto = true
 codegen-units = 1
+
+# Use the local, patched checkout (scripts/fetch-assets.sh clones it into
+# vendor/dmd_core at the pinned rev and applies patches/dmd_core-*.patch).
+[patch."https://github.com/dmdmtg/dmd_core"]
+dmd_core = { path = "../vendor/dmd_core" }

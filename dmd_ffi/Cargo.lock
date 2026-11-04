@@ -12,7 +12,6 @@ dependencies = [
 [[package]]
 name = "dmd_core"
 version = "0.6.5"
-source = "git+https://github.com/dmdmtg/dmd_core?rev=d08a593#d08a5930c5c167860434e08e59979045f538d48a"
 dependencies = [
  "lazy_static",
  "libc",

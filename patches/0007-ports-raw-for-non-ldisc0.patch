@@ -1,0 +1,20 @@
+diff --git a/3B2/3b2_ports.c b/3B2/3b2_ports.c
+index 871d5d8..c224012 100644
+--- a/3B2/3b2_ports.c
++++ b/3B2/3b2_ports.c
+@@ -444,8 +444,13 @@ static void ports_cmd(uint8 slot, cio_entry *rentry, uint8 *rapp_data)
+         sim_debug(TRACE_DBG, &ports_dev,  "    PPC Options: vtime=%02x\n", opts.vtime);
+         sim_debug(TRACE_DBG, &ports_dev,  "    PPC Options: vcount=%02x\n", opts.vcount);
+ 
+-        state->iflag = opts.iflag;
+-        state->oflag = opts.oflag;
++        /* att3b2: the card's CR/NL translation belongs to line discipline 0 only.
++         * Other disciplines (the xt multiplexer used by DMD 5620 layers) send binary
++         * packets; mapping a 0x0d byte to 0x0a corrupts them, the CRC check fails,
++         * and every retransmission is corrupted the same way, so layers hangs. */
++        sim_debug(TRACE_DBG, &ports_dev,  "    PPC Options: line=%04x\n", opts.line);
++        state->iflag = (opts.line == 0) ? opts.iflag : 0;
++        state->oflag = (opts.line == 0) ? opts.oflag : 0;
+ 
+         if ((rentry->subdevice & 7) < PORTS_LINES) {
+             /* Adjust baud rate */

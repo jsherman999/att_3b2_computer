@@ -47,6 +47,10 @@ enum DebugCapture {
             case "type": m.console?.sendBytes(Array(rest.replacingOccurrences(of: "\\r", with: "\r").utf8))
             case "dmdtype":       // keystrokes on the 5620 keyboard
                 for b in rest.replacingOccurrences(of: "\\r", with: "\r").utf8 { DMDTerminal.shared.key(b) }
+            case "dmdslow":       // keystrokes at typing speed (~8/s)
+                for b in rest.replacingOccurrences(of: "\\r", with: "\r").utf8 {
+                    DMDTerminal.shared.key(b); usleep(120_000)
+                }
             case "dmdclick":      // dmdclick x y button  (5620 coordinates, y from the bottom)
                 let f = rest.split(separator: " ").compactMap { Int($0) }
                 if f.count == 3 {
@@ -62,6 +66,10 @@ enum DebugCapture {
                 if f.count == 2 { DMDTerminal.shared.mouseMove(x: f[0], y: f[1]) }
             case "dmdrelease":
                 if let b = UInt8(rest) { DMDTerminal.shared.mouseUp(b) }
+            case "sleep":         // sleep <ms>: the 5620 keeps running on its own thread
+                usleep(useconds_t((Int(rest) ?? 0) * 1000))
+            case "snap":          // snap <name>: write dmd-<name>.png now
+                writeDMDScreen(to: dir.appendingPathComponent("dmd-\(rest).png"))
             default: break
             }
         }
